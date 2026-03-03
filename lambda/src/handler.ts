@@ -1,8 +1,9 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import type { AnalyzeRequest, AnalyzeResponse, GridPoint, GeoJSON } from './types.js';
-import { generateGrid } from './grid.js';
-import { getElevationBatch, clearTileCache } from './elevation.js';
-import { scorePoint } from './scoring.js';
+import { generateGrid, filterExclusionZones } from './grid.js';
+import { getElevationBatch } from './elevation.js';
+import { quickScorePoint, fullScorePoint } from './scoring.js';
+import { fetchLandUseAndBuildings } from './accessibility.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -29,11 +30,20 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const spacing = radiusMeters <= 1000 ? 40 : radiusMeters <= 2000 ? 50 : 70;
 
   // 1. グリッド生成
-  const gridLatLngs = generateGrid(launchSite, radiusMeters, spacing);
+  let gridLatLngs = generateGrid(launchSite, radiusMeters, spacing);
 
-  // 2. 全グリッド点 + 打上地点の標高を一括取得
+  // 1.5. 除外ゾーン内の候補を除去
+  const exclusionZones = request.exclusionZones ?? [];
+  if (exclusionZones.length > 0) {
+    gridLatLngs = filterExclusionZones(gridLatLngs, exclusionZones);
+  }
+
+  // 2. OSM データ取得と標高取得を並列実行
   const allPoints = [launchSite, ...gridLatLngs];
-  const elevations = await getElevationBatch(allPoints);
+  const [, elevations] = await Promise.all([
+    fetchLandUseAndBuildings(launchSite, radiusMeters),
+    getElevationBatch(allPoints),
+  ]);
 
   const launchSiteElevation = elevations[0] ?? 0;
 
@@ -50,25 +60,54 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     }
   }
 
-  // 4. 全点をスコアリング（並列処理、同時実行数制限付き）
-  const CONCURRENCY = 20;
-  const scoredPoints = new Array(gridPoints.length);
+  // 4. パス1: 高速な事前スコアリング（CPU のみ、ネットワーク不要）
+  const quickResults = gridPoints.map((point, idx) => ({
+    idx,
+    point,
+    ...quickScorePoint(point, launchSite, launchSiteElevation),
+  }));
 
-  for (let i = 0; i < gridPoints.length; i += CONCURRENCY) {
-    const batch = gridPoints.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(
-      batch.map((point) => scorePoint(point, launchSite, launchSiteElevation)),
-    );
-    for (let j = 0; j < results.length; j++) {
-      scoredPoints[i + j] = results[j];
+  // 事前スコアでソートし、上位候補を抽出
+  quickResults.sort((a, b) => b.quickScore - a.quickScore);
+  const TOP_N = 50;
+  const candidates = quickResults.slice(0, TOP_N);
+  const rest = quickResults.slice(TOP_N);
+
+  // 5. パス2: 上位候補の LOS・勾配用のタイルを事前取得
+  const prefetchPoints: import('./types.js').LatLng[] = [];
+  const LOS_SAMPLES = 10;
+  const SLOPE_DELTA = 0.0003;
+
+  for (const c of candidates) {
+    const p = c.point;
+    // LOS サンプル点
+    for (let s = 1; s <= LOS_SAMPLES; s++) {
+      const t = s / (LOS_SAMPLES + 1);
+      prefetchPoints.push({
+        lat: p.lat + (launchSite.lat - p.lat) * t,
+        lng: p.lng + (launchSite.lng - p.lng) * t,
+      });
     }
+    // 勾配の隣接点
+    prefetchPoints.push(
+      { lat: p.lat + SLOPE_DELTA, lng: p.lng },
+      { lat: p.lat - SLOPE_DELTA, lng: p.lng },
+      { lat: p.lat, lng: p.lng + SLOPE_DELTA },
+      { lat: p.lat, lng: p.lng - SLOPE_DELTA },
+    );
   }
+  await getElevationBatch(prefetchPoints);
 
-  // 5. スコアでソート
-  scoredPoints.sort((a, b) => b.score.total - a.score.total);
+  // フルスコアリング（タイルはキャッシュ済みなので高速）
+  const scoredTop = await Promise.all(
+    candidates.map((c) => fullScorePoint(c.point, launchSite, launchSiteElevation)),
+  );
 
-  // 6. GeoJSON 生成（全点のヒートマップ用 + トップ10）
-  const features: GeoJSON.Feature[] = scoredPoints.map((p) => ({
+  scoredTop.sort((a, b) => b.score.total - a.score.total);
+
+  // 6. GeoJSON 生成（全点のヒートマップ用 + トップ10の詳細）
+  // 上位候補: フルスコア
+  const topFeatures: GeoJSON.Feature[] = scoredTop.map((p) => ({
     type: 'Feature' as const,
     geometry: {
       type: 'Point' as const,
@@ -85,6 +124,29 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
       scoreElevation: Math.round(p.score.elevation * 100) / 100,
       scoreLOS: Math.round(p.score.lineOfSight * 100) / 100,
       scoreSlope: Math.round(p.score.slope * 100) / 100,
+      scoreAccess: Math.round(p.score.accessibility * 100) / 100,
+    },
+  }));
+
+  // 残り: 概算スコアでヒートマップ表示
+  const restFeatures: GeoJSON.Feature[] = rest.map((r) => ({
+    type: 'Feature' as const,
+    geometry: {
+      type: 'Point' as const,
+      coordinates: [r.point.lng, r.point.lat] as [number, number],
+    },
+    properties: {
+      score: Math.round(r.quickScore * 100) / 100,
+      elevation: r.point.elevation,
+      distance: Math.round(r.dist),
+      relativeElevation: Math.round(r.relElev * 10) / 10,
+      viewingAngle: Math.round(r.angleDeg * 10) / 10,
+      reason: '',
+      scoreViewingAngle: 0,
+      scoreElevation: 0,
+      scoreLOS: 0,
+      scoreSlope: 0,
+      scoreAccess: 0,
     },
   }));
 
@@ -93,10 +155,10 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     launchSiteElevation,
     radiusMeters,
     totalPointsAnalyzed: gridPoints.length,
-    topPositions: scoredPoints.slice(0, 10),
+    topPositions: scoredTop.slice(0, 10),
     geojson: {
       type: 'FeatureCollection',
-      features,
+      features: [...topFeatures, ...restFeatures],
     },
   };
 }
@@ -141,10 +203,11 @@ export async function handler(
       return errorResponse(400, '検索半径は 500〜5000m を指定してください');
     }
 
-    // キャッシュクリア（Lambda の再利用時に古いデータを防ぐ）
-    clearTileCache();
-
-    const result = await analyze({ launchSite: request.launchSite, radiusMeters });
+    const result = await analyze({
+      launchSite: request.launchSite,
+      radiusMeters,
+      exclusionZones: request.exclusionZones,
+    });
 
     return {
       statusCode: 200,

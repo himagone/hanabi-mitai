@@ -1,4 +1,4 @@
-import type { LatLng } from './types.js';
+import type { LatLng, ExclusionZone } from './types.js';
 
 /** 地球の半径 (m) */
 const EARTH_RADIUS = 6371000;
@@ -55,7 +55,6 @@ export function generateGrid(
   radiusMeters: number,
   spacingMeters: number = 50,
 ): LatLng[] {
-  const safetyZone = 200; // 打上地点から200m以内は安全圏で除外
   const points: LatLng[] = [];
 
   const steps = Math.ceil(radiusMeters / spacingMeters);
@@ -66,13 +65,49 @@ export function generateGrid(
       const eastM = nx * spacingMeters;
       const dist = Math.sqrt(northM * northM + eastM * eastM);
 
-      if (dist < safetyZone || dist > radiusMeters) continue;
+      if (dist > radiusMeters) continue;
 
       points.push(offsetLatLng(center, northM, eastM));
     }
   }
 
   return points;
+}
+
+/**
+ * 点がポリゴン内にあるかを判定 (Ray casting algorithm)
+ * @param lng 経度
+ * @param lat 緯度
+ * @param polygon 頂点の配列 [[lng, lat], ...]
+ */
+function pointInPolygon(
+  lng: number,
+  lat: number,
+  polygon: ExclusionZone,
+): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+    const intersect =
+      yi > lat !== yj > lat &&
+      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * 除外ゾーン内にある点をフィルタ除去
+ */
+export function filterExclusionZones(
+  points: LatLng[],
+  exclusionZones: ExclusionZone[],
+): LatLng[] {
+  if (exclusionZones.length === 0) return points;
+  return points.filter(
+    (p) => !exclusionZones.some((zone) => pointInPolygon(p.lng, p.lat, zone)),
+  );
 }
 
 /**

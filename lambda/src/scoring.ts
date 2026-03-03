@@ -2,58 +2,39 @@ import type { LatLng, GridPoint, ScoreBreakdown, ScoredPoint } from './types.js'
 import { haversineDistance } from './grid.js';
 import { getElevation } from './elevation.js';
 import { checkLineOfSight } from './line-of-sight.js';
+import { accessibilityScore } from './accessibility.js';
 
 /** 花火の開花高度 (打上地点の地上からの高さ, m) */
 const FIREWORK_ALTITUDE = 250;
 
 /** スコアの重み */
 const WEIGHTS = {
-  viewingAngle: 0.25,
-  elevation: 0.25,
-  lineOfSight: 0.35,
-  slope: 0.15,
+  viewingAngle: 0.20,
+  elevation: 0.15,
+  lineOfSight: 0.30,
+  slope: 0.10,
+  accessibility: 0.25,
 };
 
 /**
- * 仰角スコア（旧・距離スコアを置き換え）
- *
- * 花火を見上げる角度（仰角）が約60°になる場所が最も見やすい。
- * - 打上地点から約350mで仰角60°が目安
- * - 仰角が60°から離れるほど減点
- *
- * 仰角の計算:
- *   花火の高さ（観覧者の目線から見た） = 打上地点標高 + 開花高度 - 観覧者標高
- *   仰角 = atan(花火の高さ / 水平距離)
- *
- * @param distanceMeters 水平距離 (m)
- * @param viewerElevation 観覧者の標高 (m)
- * @param launchSiteElevation 打上地点の標高 (m)
- * @returns スコア 0.0〜1.0
+ * 仰角スコア
  */
 function viewingAngleScore(
   distanceMeters: number,
   viewerElevation: number,
   launchSiteElevation: number,
 ): { score: number; angleDeg: number } {
-  // 観覧者の目線 = 地面 + 1.5m（立ち見想定）
   const viewerEyeHeight = viewerElevation + 1.5;
-
-  // 花火が開く高さ
   const fireworkHeight = launchSiteElevation + FIREWORK_ALTITUDE;
-
-  // 観覧者から見た花火の高さ
   const heightAboveViewer = fireworkHeight - viewerEyeHeight;
 
-  // 花火が目線より低い場合（観覧者が花火より高い場所にいる）→ 低スコア
   if (heightAboveViewer <= 0) {
     return { score: 0.05, angleDeg: 0 };
   }
 
-  // 仰角（度）
   const angleRad = Math.atan2(heightAboveViewer, distanceMeters);
   const angleDeg = (angleRad * 180) / Math.PI;
 
-  // 最適仰角 = 60°、ガウス分布で評価（σ = 15°）
   const optimalAngle = 60;
   const sigma = 15;
   const diff = angleDeg - optimalAngle;
@@ -64,18 +45,14 @@ function viewingAngleScore(
 
 /**
  * 相対標高スコア
- * 打上地点より高い位置ほど高スコア
- * （周囲の建物・群衆の頭越しに見える効果）
  */
 function elevationScore(relativeElevation: number): number {
-  // シグモイド関数: 0m差 → 0.5, +10m → ~0.73, +20m → ~0.88, -10m → ~0.27
   const k = 0.1;
   return 1 / (1 + Math.exp(-k * relativeElevation));
 }
 
 /**
  * 勾配スコア
- * 打上地点に向かって下る勾配（天然の観覧席）を評価
  */
 function slopeScore(
   point: LatLng,
@@ -120,10 +97,16 @@ function slopeScore(
 function generateReason(
   scores: ScoreBreakdown,
   relativeElevation: number,
-  distanceMeters: number,
+  _distanceMeters: number,
   viewingAngleDeg: number,
 ): string {
   const reasons: string[] = [];
+
+  if (scores.accessibility >= 0.9) {
+    reasons.push('公園・広場');
+  } else if (scores.accessibility <= 0.2) {
+    reasons.push('住宅地');
+  }
 
   if (scores.lineOfSight >= 0.9) {
     reasons.push('視界良好');
@@ -151,9 +134,37 @@ function generateReason(
 }
 
 /**
- * 候補地点をスコアリング
+ * パス1: 高速な事前スコア（ネットワーク不要）
+ * viewingAngle + elevation + accessibility のみで概算
  */
-export async function scorePoint(
+export function quickScorePoint(
+  point: GridPoint,
+  launchSite: LatLng,
+  launchSiteElevation: number,
+): { dist: number; relElev: number; angleDeg: number; quickScore: number } {
+  const dist = haversineDistance(point, launchSite);
+  const relElev = point.elevation - launchSiteElevation;
+
+  const { score: angleScore, angleDeg } = viewingAngleScore(
+    dist,
+    point.elevation,
+    launchSiteElevation,
+  );
+  const elevScore = elevationScore(relElev);
+  const accessScore = accessibilityScore(point);
+
+  const quickScore =
+    WEIGHTS.viewingAngle * angleScore +
+    WEIGHTS.elevation * elevScore +
+    WEIGHTS.accessibility * accessScore;
+
+  return { dist, relElev, angleDeg, quickScore };
+}
+
+/**
+ * パス2: 上位候補のみフルスコアリング（LOS + 勾配）
+ */
+export async function fullScorePoint(
   point: GridPoint,
   launchSite: LatLng,
   launchSiteElevation: number,
@@ -161,17 +172,14 @@ export async function scorePoint(
   const dist = haversineDistance(point, launchSite);
   const relElev = point.elevation - launchSiteElevation;
 
-  // 仰角スコア
   const { score: angleScore, angleDeg } = viewingAngleScore(
     dist,
     point.elevation,
     launchSiteElevation,
   );
 
-  // 相対標高スコア
   const elevScore = elevationScore(relElev);
 
-  // 視線通過チェック
   const losScore = await checkLineOfSight(
     point,
     point.elevation,
@@ -179,7 +187,6 @@ export async function scorePoint(
     launchSiteElevation,
   );
 
-  // 勾配スコア
   const delta = 0.0003;
   const [nElev, sElev, eElev, wElev] = await Promise.all([
     getElevation(point.lat + delta, point.lng),
@@ -189,16 +196,20 @@ export async function scorePoint(
   ]);
   const slopeS = slopeScore(point, launchSite, [nElev, sElev, eElev, wElev]);
 
+  const accessScore = accessibilityScore(point);
+
   const scores: ScoreBreakdown = {
     viewingAngle: angleScore,
     elevation: elevScore,
     lineOfSight: losScore,
     slope: slopeS,
+    accessibility: accessScore,
     total:
       WEIGHTS.viewingAngle * angleScore +
       WEIGHTS.elevation * elevScore +
       WEIGHTS.lineOfSight * losScore +
-      WEIGHTS.slope * slopeS,
+      WEIGHTS.slope * slopeS +
+      WEIGHTS.accessibility * accessScore,
   };
 
   return {

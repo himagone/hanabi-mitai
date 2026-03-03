@@ -15,6 +15,14 @@
 
     <div id="controls">
       <div class="input-group">
+        <label for="preset">花火大会</label>
+        <select id="preset">
+          <option value="">-- 選択してください --</option>
+          <option value="35.758284,139.795596">足立の花火</option>
+          <option value="35.716831,139.805267">隅田川花火大会</option>
+        </select>
+      </div>
+      <div class="input-group">
         <label for="lat">緯度</label>
         <input type="number" id="lat" step="0.0001" placeholder="35.7148" />
       </div>
@@ -32,10 +40,21 @@
         </select>
       </div>
       <button id="analyze-btn" type="button">分析する</button>
+      <div class="exclusion-controls">
+        <button id="draw-exclusion-btn" type="button" class="btn-secondary">立入禁止エリアを描画</button>
+        <button id="undo-exclusion-btn" type="button" class="btn-secondary btn-small hidden">1つ戻す</button>
+        <button id="clear-exclusion-btn" type="button" class="btn-secondary btn-small hidden">全て削除</button>
+      </div>
       <p class="hint">または地図をクリックして打上地点を指定</p>
     </div>
 
     <div id="map-container">
+      <div id="drawing-banner" class="hidden">
+        <span id="drawing-status">地図をクリックして頂点を追加してください</span>
+        <button id="finish-drawing-btn" type="button" class="hidden">確定</button>
+        <button id="undo-vertex-btn" type="button" class="hidden">1点戻す</button>
+        <button id="cancel-drawing-btn" type="button">キャンセル</button>
+      </div>
       <div id="map"></div>
       <div id="loading" class="hidden">
         <div class="spinner"></div>

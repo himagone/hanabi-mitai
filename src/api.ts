@@ -5,15 +5,30 @@ const API_BASE = '/api';
 export async function analyzePosition(
   request: AnalyzeRequest,
 ): Promise<AnalyzeResponse> {
-  const response = await fetch(`${API_BASE}/analyze`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  } catch (err) {
+    throw new Error(
+      `APIサーバーに接続できません。Lambda ローカルサーバー (port 3001) が起動しているか確認してください。` +
+      (err instanceof Error ? `\n${err.message}` : ''),
+    );
+  }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `HTTP ${response.status}`);
+    const text = await response.text().catch(() => '');
+    let message = `HTTP ${response.status}`;
+    try {
+      const json = JSON.parse(text);
+      if (json.error) message = json.error;
+    } catch {
+      if (text) message += `: ${text.slice(0, 200)}`;
+    }
+    throw new Error(message);
   }
 
   return response.json();

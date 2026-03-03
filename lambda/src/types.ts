@@ -4,10 +4,14 @@ export interface LatLng {
   lng: number;
 }
 
+/** 除外ポリゴン (頂点の配列) */
+export type ExclusionZone = [number, number][]; // [lng, lat][]
+
 /** 分析リクエスト */
 export interface AnalyzeRequest {
   launchSite: LatLng;
   radiusMeters: number;
+  exclusionZones?: ExclusionZone[];
 }
 
 /** スコアの内訳 */
@@ -16,6 +20,7 @@ export interface ScoreBreakdown {
   elevation: number;
   lineOfSight: number;
   slope: number;
+  accessibility: number;
   total: number;
 }
 
