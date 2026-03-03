@@ -1,0 +1,7 @@
+node_modules/
+dist/
+lambda/dist/
+.env
+*.local
+.DS_Store
+.aws-sam/

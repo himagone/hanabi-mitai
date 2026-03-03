@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "code-review": {
+      "source": "geolonia/skills",
+      "sourceType": "github",
+      "computedHash": "f4ab7fffc7ee62b1a8cd126b7c8869835cb189a2e19a26e78755cb1b2e14303c"
+    },
+    "code-review-expert": {
+      "source": "geolonia/skills",
+      "sourceType": "github",
+      "computedHash": "017291e3c58f462ad190001d743bc3b6e3c16308efd59dc501695de685e76e4f"
+    },
+    "dev-conventions": {
+      "source": "geolonia/skills",
+      "sourceType": "github",
+      "computedHash": "e9c5c67946fd15cee67fe216472f918bade42f4c33069e45ecec5adc224035ff"
+    },
+    "geolonia-map": {
+      "source": "geolonia/skills",
+      "sourceType": "github",
+      "computedHash": "2871dfa2b444b14dcf5fbb3285df1cc329dfa5b58a149fda67f97e6f3f09ad59"
+    },
+    "geonicdb": {
+      "source": "geolonia/skills",
+      "sourceType": "github",
+      "computedHash": "2ad0877c788476e7762861723bc8ffeb9ef76056b51d6076c972d818662df7b4"
+    }
+  }
+}
