@@ -5,5 +5,5 @@ lambda/dist/
 *.local
 .DS_Store
 .aws-sam/
-.agents/
-.claude/
+.agents/skills/
+.claude/skills/
