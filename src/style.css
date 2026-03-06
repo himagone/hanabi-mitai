@@ -522,29 +522,35 @@ body {
 .is-mobile .mobile-only { display: inline-flex; }
 .is-mobile .desktop-only { display: none !important; }
 
-/* Mobile: score button */
+/* Mobile: score button — fixed to bottom of map */
 #score-here-btn {
-  padding: 12px 20px;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  padding: 14px 28px;
   min-height: 48px;
   background: var(--accent);
   color: var(--bg-primary);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 24px;
   font-size: 0.95rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
   white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 #score-here-btn:hover { background: var(--accent-hover); }
-#score-here-btn:active { transform: scale(0.97); }
+#score-here-btn:active { transform: translateX(-50%) scale(0.97); }
 #score-here-btn:disabled {
   background: var(--bg-elevated);
   color: var(--text-muted);
   cursor: not-allowed;
-  transform: none;
+  transform: translateX(-50%);
   opacity: 1;
 }
 
@@ -661,7 +667,7 @@ body {
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   #controls {
-    gap: 8px;
+    gap: 24px;
     padding: 8px 12px;
   }
 
@@ -670,7 +676,7 @@ body {
   }
 
   #header h1 {
-    font-size: 1rem;
+    font-size: 1.2rem;
   }
 
   .subtitle {
