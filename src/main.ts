@@ -217,7 +217,7 @@ function showDesktopResults(response: AnalyzeResponse): void {
 
   const summary = document.createElement('p');
   summary.style.cssText = 'font-size:0.8rem;color:#888;margin-bottom:12px;';
-  summary.textContent = `${response.totalPointsAnalyzed}ヶ所を調べました`;
+  summary.textContent = `${response.totalPointsAnalyzed}地点を分析`;
   resultsListEl.appendChild(summary);
 
   response.topPositions.slice(0, 10).forEach((p, i) => {
@@ -288,7 +288,7 @@ async function runMobileScore(): Promise<void> {
 
   if (isNaN(lat) || isNaN(lng)) {
     editorHint.classList.remove('hidden');
-    editorHintText.textContent = 'まず花火大会を選んでね ↑';
+    editorHintText.textContent = '花火大会を選択してください';
     return;
   }
 
@@ -309,7 +309,7 @@ async function runMobileScore(): Promise<void> {
       scoreHereBtn.textContent = 'ここから見える？';
     }
     editorHint.classList.remove('hidden');
-    editorHintText.textContent = '地図をタップして場所を選んでください';
+    editorHintText.textContent = '地図をタップして場所を選択';
   }
 }
 
@@ -408,7 +408,7 @@ presetSelect.addEventListener('change', () => {
     clearViewerMarker();
     // タップでもスコア確認できることを案内
     editorHint.classList.remove('hidden');
-    editorHintText.textContent = '地図をタップして花火の見え方をチェック';
+    editorHintText.textContent = '地図タップで見え方を確認';
   }
 });
 

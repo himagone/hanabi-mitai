@@ -652,11 +652,10 @@ export function renderResults(response: AnalyzeResponse): void {
     new maplibregl.Popup({ offset: 10 })
       .setLngLat(coords)
       .setHTML(
-        `<div class="popup-title">スコア: ${(p.score * 100).toFixed(0)}点</div>
+        `<div class="popup-title">${(p.score * 100).toFixed(0)}点</div>
          <div class="popup-detail">
-           距離: ${p.distance}m / 仰角: ${p.viewingAngle}°<br>
-           標高差: ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m<br>
-           視線: ${(p.scoreLOS * 100).toFixed(0)}%<br>
+           ${p.distance}m / ${p.viewingAngle}°<br>
+           ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m / 視線${(p.scoreLOS * 100).toFixed(0)}%<br>
            ${p.reason}
          </div>`,
       )
@@ -682,11 +681,10 @@ export function renderResults(response: AnalyzeResponse): void {
     el.style.cursor = 'pointer';
 
     const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
-      `<div class="popup-title">#${i + 1} スコア: ${(p.score.total * 100).toFixed(0)}点</div>
+      `<div class="popup-title">#${i + 1} — ${(p.score.total * 100).toFixed(0)}点</div>
        <div class="popup-detail">
-         距離: ${p.distanceMeters}m / 仰角: ${p.viewingAngleDeg}°<br>
-         標高差: ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m<br>
-         視界: ${(p.score.lineOfSight * 100).toFixed(0)}% / 場所: ${(p.score.accessibility * 100).toFixed(0)}%<br>
+         ${p.distanceMeters}m / ${p.viewingAngleDeg}°<br>
+         ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m / 視線${(p.score.lineOfSight * 100).toFixed(0)}%<br>
          ${p.reason}
        </div>`,
     );
