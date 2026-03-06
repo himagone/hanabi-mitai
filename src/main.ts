@@ -134,6 +134,8 @@ async function runDesktopAnalysis(): Promise<void> {
 
   isAnalyzing = true;
   analyzeBtn.disabled = true;
+  const loadingTextEl = document.getElementById('loading-text');
+  if (loadingTextEl) loadingTextEl.textContent = 'ベストスポットを探しています…';
   loadingEl.classList.remove('hidden');
   resultsEl.classList.add('hidden');
   clearResults();
@@ -319,6 +321,8 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
     scoreHereBtn.disabled = true;
     scoreHereBtn.textContent = '調べています…';
   }
+  const loadingTextEl = document.getElementById('loading-text');
+  if (loadingTextEl) loadingTextEl.textContent = 'この場所の見え方を調べています…';
   loadingEl.classList.remove('hidden');
   editorHint.classList.add('hidden');
   mobileManualMode = false;
