@@ -357,18 +357,13 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   const v = response.viewer;
   const totalPercent = Math.round(v.score.total * 100);
 
-  // Score value + color + quality label
   const scoreValueEl = document.getElementById('score-value')!;
   scoreValueEl.textContent = String(totalPercent);
   const mainEl = mobileScoreCard.querySelector('.score-card-main') as HTMLElement;
-  const quality = scoreQualityLabel(totalPercent);
   if (totalPercent >= 70) mainEl.style.borderLeftColor = '#22c55e';
   else if (totalPercent >= 50) mainEl.style.borderLeftColor = '#eab308';
   else if (totalPercent >= 30) mainEl.style.borderLeftColor = '#f97316';
   else mainEl.style.borderLeftColor = '#ef4444';
-
-  const scoreLabelEl = mobileScoreCard.querySelector('.score-label') as HTMLElement;
-  scoreLabelEl.textContent = quality.text;
 
   // Details
   document.getElementById('sc-distance')!.textContent = distanceWithWalk(v.distanceMeters);
