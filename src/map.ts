@@ -566,8 +566,7 @@ export function setLaunchMarker(lat: number, lng: number): void {
 
   const el = document.createElement('div');
   el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
-    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8bb3e4"/><stop offset="100%" stop-color="#fae1f8"/></linearGradient></defs>
-    <circle cx="16" cy="16" r="14" fill="url(#lg)" stroke="#fff" stroke-width="2"/>
+    <circle cx="16" cy="16" r="14" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
     <text x="16" y="21" text-anchor="middle" fill="#070c23" font-size="16" font-weight="bold">*</text>
   </svg>`;
 

@@ -124,7 +124,7 @@ body {
 
 #analyze-btn {
   padding: 7px 20px;
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: var(--bg-primary);
   border: none;
   border-radius: var(--radius-sm);
@@ -132,12 +132,12 @@ body {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
+  transition: background 0.15s, transform 0.1s;
   white-space: nowrap;
 }
 
 #analyze-btn:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 #analyze-btn:active {
@@ -385,7 +385,7 @@ body {
 /* Von Restorff: rank 1 */
 .result-card.rank-1 {
   border-color: rgba(139, 179, 228, 0.25);
-  background: linear-gradient(135deg, rgba(139, 179, 228, 0.06), rgba(250, 225, 248, 0.04));
+  background: rgba(139, 179, 228, 0.06);
 }
 .result-card.rank-1:hover {
   border-color: rgba(139, 179, 228, 0.4);
@@ -411,7 +411,7 @@ body {
 }
 
 .result-card.rank-1 .rank {
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: var(--bg-primary);
 }
 
@@ -526,7 +526,7 @@ body {
 #score-here-btn {
   padding: 12px 20px;
   min-height: 48px;
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: var(--bg-primary);
   border: none;
   border-radius: var(--radius-md);
@@ -534,11 +534,11 @@ body {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
+  transition: background 0.15s, transform 0.1s;
   white-space: nowrap;
 }
 
-#score-here-btn:hover { opacity: 0.9; }
+#score-here-btn:hover { background: var(--accent-hover); }
 #score-here-btn:active { transform: scale(0.97); }
 #score-here-btn:disabled {
   background: var(--bg-elevated);
