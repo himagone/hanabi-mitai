@@ -238,7 +238,7 @@ export function accessibilityScore(point: LatLng): number {
   }
 
   if (inPark) return 1.0;
-  if (inResidential) return 0.1;
+  if (inResidential) return 0.3;
   return 0.6;
 }
 

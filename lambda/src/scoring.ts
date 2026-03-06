@@ -9,18 +9,18 @@ const DEFAULT_FIREWORK_DIAMETER = 150;
 
 /** 直径から開花高度を推定 (打上地点の地上からの高さ, m) */
 function estimateAltitude(diameter: number): number {
-  // 号数ごとの実績値に基づく線形近似
-  // 4号(120m径)→130m高, 5号(150m径)→170m高, 10号(280m径)→250m高
-  return 50 + diameter * 0.72;
+  // 実測データに基づく線形近似
+  // 4号(120m径)→162m高, 5号(150m径)→195m高, 10号(300m径)→360m高
+  return 30 + diameter * 1.1;
 }
 
 /** スコアの重み */
 const WEIGHTS = {
-  viewingAngle: 0.20,
+  viewingAngle: 0.25,
   elevation: 0.15,
-  lineOfSight: 0.30,
+  lineOfSight: 0.35,
   slope: 0.10,
-  accessibility: 0.25,
+  accessibility: 0.15,
 };
 
 /**
@@ -38,12 +38,12 @@ function distanceVisibilityScore(distanceMeters: number, bloomDiameter: number):
   // 花火の見かけの角度サイズ (度)
   const apparentAngleDeg = Math.atan2(bloomDiameter, distanceMeters) * 180 / Math.PI;
 
-  // 見かけサイズスコア: 3°以上で良好、0.5°以下でほぼ見えない
+  // 見かけサイズスコア: 3°以上で良好、0.3°以下でほぼ見えない
   let sizeScore: number;
   if (apparentAngleDeg >= 3) {
     sizeScore = 1.0;
-  } else if (apparentAngleDeg >= 0.5) {
-    sizeScore = (apparentAngleDeg - 0.5) / (3 - 0.5);
+  } else if (apparentAngleDeg >= 0.3) {
+    sizeScore = (apparentAngleDeg - 0.3) / (3 - 0.3);
   } else {
     sizeScore = 0;
   }
@@ -74,8 +74,8 @@ function viewingAngleScore(
   const angleRad = Math.atan2(heightAboveViewer, distanceMeters);
   const angleDeg = (angleRad * 180) / Math.PI;
 
-  const optimalAngle = 60;
-  const sigma = 15;
+  const optimalAngle = 35;
+  const sigma = 25;
   const diff = angleDeg - optimalAngle;
   const score = Math.exp(-(diff * diff) / (2 * sigma * sigma));
 
@@ -163,9 +163,9 @@ function generateReason(
     reasons.push('建物で遮蔽あり');
   }
 
-  if (viewingAngleDeg >= 50 && viewingAngleDeg <= 70) {
+  if (viewingAngleDeg >= 25 && viewingAngleDeg <= 45) {
     reasons.push('仰角良好');
-  } else if (viewingAngleDeg >= 30 && viewingAngleDeg < 50) {
+  } else if (viewingAngleDeg >= 10 && viewingAngleDeg < 25) {
     reasons.push('仰角やや低い');
   }
 

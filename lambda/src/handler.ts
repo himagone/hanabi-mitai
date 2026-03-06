@@ -69,7 +69,7 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
 
   // 事前スコアでソートし、上位候補を抽出
   quickResults.sort((a, b) => b.quickScore - a.quickScore);
-  const TOP_N = 50;
+  const TOP_N = 100;
   const candidates = quickResults.slice(0, TOP_N);
   const rest = quickResults.slice(TOP_N);
 
