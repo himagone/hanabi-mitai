@@ -384,6 +384,97 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   document.getElementById('sc-reason')!.textContent = v.reason;
 
   mobileScoreCard.classList.remove('hidden');
+  mobileScoreCard.classList.remove('minimized');
+  mobileScoreCard.style.transform = '';
+  bottomSheetFullHeight = mobileScoreCard.offsetHeight;
+  bottomSheetMinY = bottomSheetFullHeight - BOTTOM_SHEET_PEEK;
+}
+
+// ============================================================
+// Bottom sheet swipe logic
+// ============================================================
+
+const BOTTOM_SHEET_PEEK = 72; // minimized時に見える高さ (px)
+let bottomSheetFullHeight = 0;
+let bottomSheetMinY = 0;
+let bsDragStartY = 0;
+let bsDragCurrentY = 0;
+let bsDragging = false;
+let bsMinimized = false;
+
+if (isMobile && mobileScoreCard) {
+  const handle = mobileScoreCard.querySelector('.bottom-sheet-handle') as HTMLElement;
+
+  const onStart = (clientY: number) => {
+    bsDragging = true;
+    bsDragStartY = clientY;
+    bsDragCurrentY = clientY;
+    mobileScoreCard!.style.transition = 'none';
+  };
+
+  const onMove = (clientY: number) => {
+    if (!bsDragging) return;
+    bsDragCurrentY = clientY;
+    const dy = bsDragCurrentY - bsDragStartY;
+    const baseY = bsMinimized ? bottomSheetMinY : 0;
+    const newY = Math.max(0, baseY + dy);
+    mobileScoreCard!.style.transform = `translateY(${newY}px)`;
+  };
+
+  const onEnd = () => {
+    if (!bsDragging) return;
+    bsDragging = false;
+    mobileScoreCard!.style.transition = '';
+    const dy = bsDragCurrentY - bsDragStartY;
+
+    if (bsMinimized) {
+      // 上にスワイプ → 展開
+      if (dy < -40) {
+        bsMinimized = false;
+        mobileScoreCard!.classList.remove('minimized');
+        mobileScoreCard!.style.transform = '';
+      } else {
+        mobileScoreCard!.style.transform = `translateY(${bottomSheetMinY}px)`;
+      }
+    } else {
+      // 下にスワイプ → 最小化
+      if (dy > 40) {
+        bsMinimized = true;
+        mobileScoreCard!.classList.add('minimized');
+        mobileScoreCard!.style.transform = `translateY(${bottomSheetMinY}px)`;
+      } else {
+        mobileScoreCard!.style.transform = '';
+      }
+    }
+  };
+
+  handle.addEventListener('touchstart', (e) => {
+    onStart(e.touches[0].clientY);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (bsDragging) onMove(e.touches[0].clientY);
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    onEnd();
+  });
+
+  // ハンドルタップで切り替え
+  handle.addEventListener('click', () => {
+    if (!mobileScoreCard!.classList.contains('hidden')) {
+      bottomSheetFullHeight = mobileScoreCard!.scrollHeight;
+      bottomSheetMinY = bottomSheetFullHeight - BOTTOM_SHEET_PEEK;
+      bsMinimized = !bsMinimized;
+      if (bsMinimized) {
+        mobileScoreCard!.classList.add('minimized');
+        mobileScoreCard!.style.transform = `translateY(${bottomSheetMinY}px)`;
+      } else {
+        mobileScoreCard!.classList.remove('minimized');
+        mobileScoreCard!.style.transform = '';
+      }
+    }
+  });
 }
 
 // ============================================================

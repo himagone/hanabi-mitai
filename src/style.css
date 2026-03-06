@@ -554,7 +554,7 @@ body {
   opacity: 1;
 }
 
-/* ===== Mobile score card ===== */
+/* ===== Mobile score card (bottom sheet) ===== */
 #mobile-score-card {
   position: absolute;
   bottom: 0;
@@ -565,15 +565,33 @@ body {
   backdrop-filter: blur(24px);
   border-top: 1px solid var(--border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 20px 20px 28px;
-  max-height: 55vh;
+  padding: 8px 20px 28px;
+  max-height: 60vh;
   overflow-y: auto;
-  animation: slide-up 0.3s ease-out;
+  transform: translateY(0);
+  transition: transform 0.3s ease-out;
+  touch-action: none;
+  will-change: transform;
 }
 
-@keyframes slide-up {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+#mobile-score-card.minimized {
+  overflow-y: hidden;
+}
+
+.bottom-sheet-handle {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 12px;
+  cursor: grab;
+}
+
+.bottom-sheet-handle span {
+  display: block;
+  width: 36px;
+  height: 4px;
+  background: var(--text-muted);
+  border-radius: 2px;
+  opacity: 0.5;
 }
 
 .score-card-main {
