@@ -2,7 +2,7 @@ import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResp
 
 const API_BASE = import.meta.env.DEV
   ? '/api'
-  : 'https://fl267a9ued.execute-api.ap-northeast-1.amazonaws.com/prod';
+  : 'https://fl267a9ued.execute-api.ap-northeast-1.amazonaws.com/prod/api';
 
 export async function analyzePosition(
   request: AnalyzeRequest,

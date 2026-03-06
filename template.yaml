@@ -31,6 +31,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /api/analyze
             Method: POST
+        ScorePointApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/score-point
+            Method: POST
 
   # HTTP API (API Gateway v2 - 低コスト)
   HttpApi:
