@@ -75,14 +75,23 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
 
   // 5. パス2: 上位候補の LOS・勾配用のタイルを事前取得
   const prefetchPoints: import('./types.js').LatLng[] = [];
-  const LOS_SAMPLES = 10;
   const SLOPE_DELTA = 0.0003;
 
   for (const c of candidates) {
     const p = c.point;
-    // LOS サンプル点
-    for (let s = 1; s <= LOS_SAMPLES; s++) {
-      const t = s / (LOS_SAMPLES + 1);
+    const dist = c.dist;
+    // LOS サンプル点: 近距離20m間隔、遠距離100m間隔
+    const nearThreshold = Math.min(200, dist * 0.3);
+    for (let d = 20; d <= nearThreshold; d += 20) {
+      const t = d / dist;
+      prefetchPoints.push({
+        lat: p.lat + (launchSite.lat - p.lat) * t,
+        lng: p.lng + (launchSite.lng - p.lng) * t,
+      });
+    }
+    for (let d = Math.max(nearThreshold, 100); d < dist; d += 100) {
+      const t = d / dist;
+      if (t > 0.95) break;
       prefetchPoints.push({
         lat: p.lat + (launchSite.lat - p.lat) * t,
         lng: p.lng + (launchSite.lng - p.lng) * t,
@@ -186,11 +195,20 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
 
   // LOS・勾配用のタイルを事前取得
   const prefetchPoints: import('./types.js').LatLng[] = [];
-  const LOS_SAMPLES = 10;
   const SLOPE_DELTA = 0.0003;
 
-  for (let s = 1; s <= LOS_SAMPLES; s++) {
-    const t = s / (LOS_SAMPLES + 1);
+  // LOS サンプル点: 近距離20m間隔、遠距離100m間隔
+  const nearThreshold = Math.min(200, dist * 0.3);
+  for (let d = 20; d <= nearThreshold; d += 20) {
+    const t = d / dist;
+    prefetchPoints.push({
+      lat: viewerLocation.lat + (launchSite.lat - viewerLocation.lat) * t,
+      lng: viewerLocation.lng + (launchSite.lng - viewerLocation.lng) * t,
+    });
+  }
+  for (let d = Math.max(nearThreshold, 100); d < dist; d += 100) {
+    const t = d / dist;
+    if (t > 0.95) break;
     prefetchPoints.push({
       lat: viewerLocation.lat + (launchSite.lat - viewerLocation.lat) * t,
       lng: viewerLocation.lng + (launchSite.lng - viewerLocation.lng) * t,

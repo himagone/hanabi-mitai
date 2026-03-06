@@ -240,6 +240,7 @@ export async function fullScorePoint(
     point.elevation,
     launchSite,
     launchSiteElevation,
+    altitude,
   );
 
   const delta = 0.0003;
