@@ -525,7 +525,7 @@ body {
 /* Mobile: score button — fixed to bottom of map */
 #score-here-btn {
   position: absolute;
-  bottom: 20px;
+  bottom: 36px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 8;
@@ -681,6 +681,10 @@ body {
 
   .subtitle {
     display: none;
+  }
+
+  #editor-hint {
+    bottom: 92px;
   }
 
   .input-group input,
