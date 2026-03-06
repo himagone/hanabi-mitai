@@ -1,7 +1,7 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import type { AnalyzeRequest, AnalyzeResponse, GridPoint, GeoJSON } from './types.js';
-import { generateGrid, filterExclusionZones } from './grid.js';
-import { getElevationBatch } from './elevation.js';
+import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse, GridPoint, GeoJSON } from './types.js';
+import { generateGrid, filterExclusionZones, haversineDistance } from './grid.js';
+import { getElevationBatch, getElevation } from './elevation.js';
 import { quickScorePoint, fullScorePoint } from './scoring.js';
 import { fetchLandUseAndBuildings } from './accessibility.js';
 
@@ -164,6 +164,72 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
 }
 
 /**
+ * 単一地点のスコアリング
+ */
+async function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
+  const { launchSite, viewerLocation } = request;
+
+  const dist = haversineDistance(launchSite, viewerLocation);
+  const osmRadius = Math.min(Math.max(dist + 500, 1000), 5000);
+
+  const [, elevations] = await Promise.all([
+    fetchLandUseAndBuildings(launchSite, osmRadius),
+    getElevationBatch([launchSite, viewerLocation]),
+  ]);
+
+  const launchSiteElevation = elevations[0] ?? 0;
+  const viewerElevation = elevations[1];
+
+  if (viewerElevation === null) {
+    throw new Error('現在地の標高データを取得できませんでした');
+  }
+
+  // LOS・勾配用のタイルを事前取得
+  const prefetchPoints: import('./types.js').LatLng[] = [];
+  const LOS_SAMPLES = 10;
+  const SLOPE_DELTA = 0.0003;
+
+  for (let s = 1; s <= LOS_SAMPLES; s++) {
+    const t = s / (LOS_SAMPLES + 1);
+    prefetchPoints.push({
+      lat: viewerLocation.lat + (launchSite.lat - viewerLocation.lat) * t,
+      lng: viewerLocation.lng + (launchSite.lng - viewerLocation.lng) * t,
+    });
+  }
+  prefetchPoints.push(
+    { lat: viewerLocation.lat + SLOPE_DELTA, lng: viewerLocation.lng },
+    { lat: viewerLocation.lat - SLOPE_DELTA, lng: viewerLocation.lng },
+    { lat: viewerLocation.lat, lng: viewerLocation.lng + SLOPE_DELTA },
+    { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
+  );
+  await getElevationBatch(prefetchPoints);
+
+  const viewer = await fullScorePoint(
+    { lat: viewerLocation.lat, lng: viewerLocation.lng, elevation: viewerElevation },
+    launchSite,
+    launchSiteElevation,
+  );
+
+  return { launchSite, launchSiteElevation, viewer };
+}
+
+/**
+ * LatLng のバリデーション
+ */
+function validateLatLng(point: { lat?: unknown; lng?: unknown }, label: string): string | null {
+  if (!point || typeof point.lat !== 'number' || typeof point.lng !== 'number') {
+    return `${label}の緯度経度が必要です`;
+  }
+  if (point.lat < 20 || point.lat > 46) {
+    return `${label}の緯度は日本国内 (20〜46) を指定してください`;
+  }
+  if (point.lng < 122 || point.lng > 154) {
+    return `${label}の経度は日本国内 (122〜154) を指定してください`;
+  }
+  return null;
+}
+
+/**
  * Lambda ハンドラー
  */
 export async function handler(
@@ -174,29 +240,36 @@ export async function handler(
     return { statusCode: 200, headers: CORS_HEADERS, body: '' };
   }
 
+  const path = event.rawPath || event.requestContext.http.path || '';
+
   try {
     if (!event.body) {
       return errorResponse(400, 'リクエストボディが必要です');
     }
 
+    // --- /api/score-point ---
+    if (path.endsWith('/score-point')) {
+      const req: ScorePointRequest = JSON.parse(event.body);
+
+      const launchErr = validateLatLng(req.launchSite, '打上地点');
+      if (launchErr) return errorResponse(400, launchErr);
+
+      const viewerErr = validateLatLng(req.viewerLocation, '現在地');
+      if (viewerErr) return errorResponse(400, viewerErr);
+
+      const result = await scorePoint(req);
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: JSON.stringify(result),
+      };
+    }
+
+    // --- /api/analyze (default) ---
     const request: AnalyzeRequest = JSON.parse(event.body);
 
-    // バリデーション
-    if (
-      !request.launchSite ||
-      typeof request.launchSite.lat !== 'number' ||
-      typeof request.launchSite.lng !== 'number'
-    ) {
-      return errorResponse(400, '打上地点の緯度経度が必要です');
-    }
-
-    if (request.launchSite.lat < 20 || request.launchSite.lat > 46) {
-      return errorResponse(400, '緯度は日本国内 (20〜46) を指定してください');
-    }
-
-    if (request.launchSite.lng < 122 || request.launchSite.lng > 154) {
-      return errorResponse(400, '経度は日本国内 (122〜154) を指定してください');
-    }
+    const launchErr = validateLatLng(request.launchSite, '打上地点');
+    if (launchErr) return errorResponse(400, launchErr);
 
     const radiusMeters = request.radiusMeters || 2000;
     if (radiusMeters < 500 || radiusMeters > 5000) {
@@ -215,7 +288,8 @@ export async function handler(
       body: JSON.stringify(result),
     };
   } catch (err) {
-    console.error('Analysis error:', err);
-    return errorResponse(500, '分析処理でエラーが発生しました');
+    console.error('Error:', err);
+    const message = err instanceof Error ? err.message : '処理でエラーが発生しました';
+    return errorResponse(500, message);
   }
 }

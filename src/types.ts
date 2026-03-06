@@ -7,6 +7,19 @@ export interface LatLng {
 /** 除外ポリゴン (頂点の配列) */
 export type ExclusionZone = [number, number][]; // [lng, lat][]
 
+/** 単一地点スコアリクエスト */
+export interface ScorePointRequest {
+  launchSite: LatLng;
+  viewerLocation: LatLng;
+}
+
+/** 単一地点スコアレスポンス */
+export interface ScorePointResponse {
+  launchSite: LatLng;
+  launchSiteElevation: number;
+  viewer: ScoredPoint;
+}
+
 /** 分析リクエスト */
 export interface AnalyzeRequest {
   launchSite: LatLng;

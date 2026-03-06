@@ -7,6 +7,7 @@ const MIN_DRAG_PX = 8;
 // --- Map references ---
 let map: maplibregl.Map | null = null;
 let launchMarker: maplibregl.Marker | null = null;
+let viewerMarker: maplibregl.Marker | null = null;
 const topMarkers: maplibregl.Marker[] = [];
 
 // --- Editor state ---
@@ -708,4 +709,42 @@ export function focusOnPosition(index: number): void {
   const lngLat = topMarkers[index].getLngLat();
   map.flyTo({ center: lngLat, zoom: 16 });
   topMarkers[index].togglePopup();
+}
+
+// --- Viewer marker (mobile) ---
+
+export function setViewerMarker(lat: number, lng: number, label?: string): void {
+  if (!map) return;
+  if (viewerMarker) viewerMarker.remove();
+
+  const el = document.createElement('div');
+  el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
+    <circle cx="16" cy="16" r="14" fill="#3b82f6" stroke="#fff" stroke-width="2"/>
+    <circle cx="16" cy="16" r="5" fill="#fff"/>
+  </svg>`;
+
+  viewerMarker = new maplibregl.Marker({ element: el })
+    .setLngLat([lng, lat])
+    .setPopup(
+      new maplibregl.Popup({ offset: 20 }).setHTML(
+        `<div class="popup-title">現在地</div>
+         <div class="popup-detail">${label || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}</div>`,
+      ),
+    )
+    .addTo(map);
+}
+
+export function fitToLaunchAndViewer(): void {
+  if (!map || !launchMarker || !viewerMarker) return;
+  const bounds = new maplibregl.LngLatBounds();
+  bounds.extend(launchMarker.getLngLat());
+  bounds.extend(viewerMarker.getLngLat());
+  map.fitBounds(bounds, { padding: 80, maxZoom: 15 });
+}
+
+export function clearViewerMarker(): void {
+  if (viewerMarker) {
+    viewerMarker.remove();
+    viewerMarker = null;
+  }
 }

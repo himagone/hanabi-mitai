@@ -16,14 +16,15 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === '/api/analyze' && req.method === 'POST') {
+  if ((req.url === '/api/analyze' || req.url === '/api/score-point') && req.method === 'POST') {
     let body = '';
     req.on('data', (chunk) => (body += chunk));
     req.on('end', async () => {
       try {
         const event = {
           body,
-          requestContext: { http: { method: 'POST' } },
+          rawPath: req.url,
+          requestContext: { http: { method: 'POST', path: req.url } },
         } as APIGatewayProxyEventV2;
 
         const result = await handler(event);

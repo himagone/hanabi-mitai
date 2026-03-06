@@ -13,9 +13,15 @@ import {
   getEditorMode,
   isDrawing,
   onStateChange,
+  setViewerMarker,
+  fitToLaunchAndViewer,
+  clearViewerMarker,
 } from './map.js';
-import { analyzePosition } from './api.js';
-import type { AnalyzeResponse } from './types.js';
+import { analyzePosition, scorePoint } from './api.js';
+import type { AnalyzeResponse, ScorePointResponse } from './types.js';
+
+// --- Mobile detection ---
+const isMobile = window.innerWidth <= 768;
 
 // DOM
 const presetSelect = document.getElementById('preset') as HTMLSelectElement;
@@ -26,14 +32,24 @@ const analyzeBtn = document.getElementById('analyze-btn') as HTMLButtonElement;
 const loadingEl = document.getElementById('loading') as HTMLElement;
 const resultsEl = document.getElementById('results') as HTMLElement;
 const resultsListEl = document.getElementById('results-list') as HTMLElement;
-
-const drawRectBtn = document.getElementById('draw-rect-btn') as HTMLButtonElement;
-const undoExclusionBtn = document.getElementById('undo-exclusion-btn') as HTMLButtonElement;
-const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTMLButtonElement;
 const editorHint = document.getElementById('editor-hint') as HTMLElement;
 const editorHintText = document.getElementById('editor-hint-text') as HTMLElement;
 
+// Desktop only
+const drawRectBtn = document.getElementById('draw-rect-btn') as HTMLButtonElement | null;
+const undoExclusionBtn = document.getElementById('undo-exclusion-btn') as HTMLButtonElement | null;
+const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTMLButtonElement | null;
+
+// Mobile only
+const scoreHereBtn = document.getElementById('score-here-btn') as HTMLButtonElement | null;
+const mobileScoreCard = document.getElementById('mobile-score-card') as HTMLElement | null;
+
 let isAnalyzing = false;
+
+// Apply mobile class for CSS
+if (isMobile) {
+  document.body.classList.add('is-mobile');
+}
 
 function setLaunchSite(lat: number, lng: number): void {
   latInput.value = lat.toFixed(6);
@@ -41,61 +57,64 @@ function setLaunchSite(lat: number, lng: number): void {
   setLaunchMarker(lat, lng);
 }
 
-function updateUI(): void {
-  const mode = getEditorMode();
-  const zones = getExclusionZones();
-  const drawing = isDrawing();
+// ============================================================
+// Desktop: existing behavior
+// ============================================================
 
-  undoExclusionBtn.classList.toggle('hidden', zones.length === 0 || drawing);
-  clearExclusionBtn.classList.toggle('hidden', zones.length === 0 || drawing);
+if (!isMobile) {
+  function updateUI(): void {
+    const mode = getEditorMode();
+    const zones = getExclusionZones();
+    const drawing = isDrawing();
 
-  drawRectBtn.classList.toggle('active', mode === 'drawing-rect');
+    undoExclusionBtn?.classList.toggle('hidden', zones.length === 0 || drawing);
+    clearExclusionBtn?.classList.toggle('hidden', zones.length === 0 || drawing);
+    drawRectBtn?.classList.toggle('active', mode === 'drawing-rect');
 
-  switch (mode) {
-    case 'drawing-rect':
-      editorHint.classList.remove('hidden');
-      editorHintText.textContent = 'ドラッグで矩形を描画 \u00B7 Esc キャンセル';
-      break;
-    case 'selected':
-      editorHint.classList.remove('hidden');
-      editorHintText.textContent = 'ドラッグで頂点移動 \u00B7 辺の中点ドラッグで追加 \u00B7 Delete 削除 \u00B7 Esc 選択解除';
-      break;
-    default:
-      editorHint.classList.add('hidden');
+    switch (mode) {
+      case 'drawing-rect':
+        editorHint.classList.remove('hidden');
+        editorHintText.textContent = 'ドラッグで矩形を描画 \u00B7 Esc キャンセル';
+        break;
+      case 'selected':
+        editorHint.classList.remove('hidden');
+        editorHintText.textContent = 'ドラッグで頂点移動 \u00B7 辺の中点ドラッグで追加 \u00B7 Delete 削除 \u00B7 Esc 選択解除';
+        break;
+      default:
+        editorHint.classList.add('hidden');
+    }
   }
+
+  onStateChange(updateUI);
+
+  drawRectBtn?.addEventListener('click', () => {
+    if (getEditorMode() === 'drawing-rect') {
+      cancelDrawing();
+    } else {
+      startDrawingRect();
+    }
+  });
+
+  undoExclusionBtn?.addEventListener('click', () => {
+    undoLastExclusionZone();
+    updateUI();
+  });
+
+  clearExclusionBtn?.addEventListener('click', () => {
+    clearExclusionZones();
+    updateUI();
+  });
+
+  analyzeBtn.addEventListener('click', runDesktopAnalysis);
+
+  [latInput, lngInput].forEach((input) => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runDesktopAnalysis();
+    });
+  });
 }
 
-onStateChange(updateUI);
-
-// Preset
-presetSelect.addEventListener('change', () => {
-  const value = presetSelect.value;
-  if (!value) return;
-  const [lat, lng] = value.split(',').map(Number);
-  setLaunchSite(lat, lng);
-});
-
-// Draw button toggle
-drawRectBtn.addEventListener('click', () => {
-  if (getEditorMode() === 'drawing-rect') {
-    cancelDrawing();
-  } else {
-    startDrawingRect();
-  }
-});
-
-undoExclusionBtn.addEventListener('click', () => {
-  undoLastExclusionZone();
-  updateUI();
-});
-
-clearExclusionBtn.addEventListener('click', () => {
-  clearExclusionZones();
-  updateUI();
-});
-
-// Analysis
-async function runAnalysis(): Promise<void> {
+async function runDesktopAnalysis(): Promise<void> {
   const lat = parseFloat(latInput.value);
   const lng = parseFloat(lngInput.value);
 
@@ -103,7 +122,6 @@ async function runAnalysis(): Promise<void> {
     alert('緯度と経度を入力してください');
     return;
   }
-
   if (lat < 20 || lat > 46 || lng < 122 || lng > 154) {
     alert('日本国内の座標を入力してください');
     return;
@@ -126,7 +144,7 @@ async function runAnalysis(): Promise<void> {
     });
 
     renderResults(response);
-    showResultsPanel(response);
+    showDesktopResults(response);
   } catch (err) {
     console.error('Analysis failed:', err);
     const message = err instanceof Error ? err.message : '不明なエラー';
@@ -138,7 +156,7 @@ async function runAnalysis(): Promise<void> {
   }
 }
 
-function showResultsPanel(response: AnalyzeResponse): void {
+function showDesktopResults(response: AnalyzeResponse): void {
   resultsListEl.innerHTML = '';
 
   const summary = document.createElement('p');
@@ -167,24 +185,142 @@ function showResultsPanel(response: AnalyzeResponse): void {
         <div class="segment" style="flex:${p.score.slope};background:#f59e0b;" title="勾配"></div>
       </div>
     `;
-
     resultsListEl.appendChild(card);
   });
 
   resultsEl.classList.remove('hidden');
 }
 
-// Init map
-initMap('map', (lat, lng) => {
-  if (isAnalyzing) return;
-  presetSelect.value = '';
+// ============================================================
+// Mobile: current location score
+// ============================================================
+
+if (isMobile && scoreHereBtn) {
+  scoreHereBtn.addEventListener('click', runMobileScore);
+}
+
+function getCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('お使いのブラウザは位置情報に対応していません'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, (err) => {
+      switch (err.code) {
+        case err.PERMISSION_DENIED:
+          reject(new Error('位置情報の許可が必要です。ブラウザの設定を確認してください'));
+          break;
+        case err.POSITION_UNAVAILABLE:
+          reject(new Error('位置情報を取得できません'));
+          break;
+        case err.TIMEOUT:
+          reject(new Error('位置情報の取得がタイムアウトしました'));
+          break;
+        default:
+          reject(new Error('位置情報の取得に失敗しました'));
+      }
+    }, { enableHighAccuracy: true, timeout: 15000 });
+  });
+}
+
+async function runMobileScore(): Promise<void> {
+  const lat = parseFloat(latInput.value);
+  const lng = parseFloat(lngInput.value);
+
+  if (isNaN(lat) || isNaN(lng)) {
+    alert('まず花火大会を選択してください');
+    return;
+  }
+
+  if (scoreHereBtn) {
+    scoreHereBtn.disabled = true;
+    scoreHereBtn.textContent = '位置情報を取得中...';
+  }
+  loadingEl.classList.remove('hidden');
+
+  try {
+    const pos = await getCurrentPosition();
+    const viewerLat = pos.coords.latitude;
+    const viewerLng = pos.coords.longitude;
+
+    if (scoreHereBtn) scoreHereBtn.textContent = 'スコアを計算中...';
+
+    setViewerMarker(viewerLat, viewerLng);
+    fitToLaunchAndViewer();
+
+    const response = await scorePoint({
+      launchSite: { lat, lng },
+      viewerLocation: { lat: viewerLat, lng: viewerLng },
+    });
+
+    showMobileScoreCard(response);
+  } catch (err) {
+    console.error('Score failed:', err);
+    const message = err instanceof Error ? err.message : '不明なエラー';
+    alert(message);
+  } finally {
+    loadingEl.classList.add('hidden');
+    if (scoreHereBtn) {
+      scoreHereBtn.disabled = false;
+      scoreHereBtn.textContent = '現在地のスコアを確認';
+    }
+  }
+}
+
+function showMobileScoreCard(response: ScorePointResponse): void {
+  if (!mobileScoreCard) return;
+
+  const v = response.viewer;
+  const totalPercent = Math.round(v.score.total * 100);
+
+  // Score value + color
+  const scoreValueEl = document.getElementById('score-value')!;
+  scoreValueEl.textContent = String(totalPercent);
+  const mainEl = mobileScoreCard.querySelector('.score-card-main') as HTMLElement;
+  if (totalPercent >= 70) mainEl.style.borderLeftColor = '#22c55e';
+  else if (totalPercent >= 50) mainEl.style.borderLeftColor = '#eab308';
+  else if (totalPercent >= 30) mainEl.style.borderLeftColor = '#f97316';
+  else mainEl.style.borderLeftColor = '#ef4444';
+
+  // Details
+  document.getElementById('sc-distance')!.textContent = `${v.distanceMeters}m`;
+  document.getElementById('sc-angle')!.textContent = `${v.viewingAngleDeg}°`;
+  document.getElementById('sc-elevation')!.textContent =
+    `${v.relativeElevation > 0 ? '+' : ''}${v.relativeElevation}m`;
+  document.getElementById('sc-los')!.textContent =
+    `${Math.round(v.score.lineOfSight * 100)}%`;
+
+  // Bars
+  (document.getElementById('bar-angle') as HTMLElement).style.width = `${v.score.viewingAngle * 100}%`;
+  (document.getElementById('bar-los') as HTMLElement).style.width = `${v.score.lineOfSight * 100}%`;
+  (document.getElementById('bar-access') as HTMLElement).style.width = `${v.score.accessibility * 100}%`;
+  (document.getElementById('bar-slope') as HTMLElement).style.width = `${v.score.slope * 100}%`;
+
+  // Reason
+  document.getElementById('sc-reason')!.textContent = v.reason;
+
+  mobileScoreCard.classList.remove('hidden');
+}
+
+// ============================================================
+// Common: init
+// ============================================================
+
+presetSelect.addEventListener('change', () => {
+  const value = presetSelect.value;
+  if (!value) return;
+  const [lat, lng] = value.split(',').map(Number);
   setLaunchSite(lat, lng);
+  // Mobile: hide old score when switching
+  if (isMobile) {
+    mobileScoreCard?.classList.add('hidden');
+    clearViewerMarker();
+  }
 });
 
-analyzeBtn.addEventListener('click', runAnalysis);
-
-[latInput, lngInput].forEach((input) => {
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') runAnalysis();
-  });
+initMap('map', (lat, lng) => {
+  if (isAnalyzing) return;
+  if (isMobile) return; // mobile: don't set launch by map click
+  presetSelect.value = '';
+  setLaunchSite(lat, lng);
 });

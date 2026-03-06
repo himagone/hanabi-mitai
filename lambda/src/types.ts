@@ -46,6 +46,19 @@ export interface AnalyzeResponse {
   geojson: GeoJSON.FeatureCollection;
 }
 
+/** 単一地点スコアリクエスト */
+export interface ScorePointRequest {
+  launchSite: LatLng;
+  viewerLocation: LatLng;
+}
+
+/** 単一地点スコアレスポンス */
+export interface ScorePointResponse {
+  launchSite: LatLng;
+  launchSiteElevation: number;
+  viewer: ScoredPoint;
+}
+
 /** グリッド上の地点（標高付き） */
 export interface GridPoint {
   lat: number;
