@@ -3,23 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>花火みたい - ベストポジション検索</title>
+  <title>花火みたい</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <div id="app">
     <header id="header">
       <h1>花火みたい</h1>
-      <p class="subtitle">花火のベストポジションを地形から分析</p>
+      <p class="subtitle">花火がよく見える場所を探そう</p>
     </header>
 
     <div id="controls">
       <div class="input-group">
         <label for="preset">花火大会</label>
         <select id="preset">
-          <option value="">-- 選択してください --</option>
-          <option value="35.758284,139.795596" data-diameter="120">足立の花火（4号玉）</option>
-          <option value="35.716831,139.805267" data-diameter="150">隅田川花火大会（5号玉）</option>
+          <option value="">-- 花火大会を選ぶ --</option>
+          <option value="35.758284,139.795596" data-diameter="120">足立の花火</option>
+          <option value="35.716831,139.805267" data-diameter="150">隅田川花火大会</option>
         </select>
       </div>
       <div class="input-group desktop-only">
@@ -31,7 +31,7 @@
         <input type="number" id="lng" step="0.0001" placeholder="139.8033" />
       </div>
       <div class="input-group desktop-only">
-        <label for="radius">検索半径 (m)</label>
+        <label for="radius">探す範囲</label>
         <select id="radius">
           <option value="1000">1,000m</option>
           <option value="1500">1,500m</option>
@@ -39,7 +39,7 @@
           <option value="3000">3,000m</option>
         </select>
       </div>
-      <button id="analyze-btn" type="button" class="desktop-only">分析する</button>
+      <button id="analyze-btn" type="button" class="desktop-only">ベストスポットを探す</button>
       <div class="exclusion-controls desktop-only">
         <button id="draw-rect-btn" type="button" class="btn-tool" title="ドラッグで立入禁止エリアを描画">
           <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -48,7 +48,7 @@
         <button id="undo-exclusion-btn" type="button" class="btn-tool btn-small hidden">戻す</button>
         <button id="clear-exclusion-btn" type="button" class="btn-tool btn-small hidden">全削除</button>
       </div>
-      <button id="score-here-btn" type="button" class="mobile-only">現在地のスコアを確認</button>
+      <button id="score-here-btn" type="button" class="mobile-only">ここから見える？</button>
       <p class="hint desktop-only">または地図をクリックして打上地点を指定</p>
     </div>
 
@@ -59,21 +59,21 @@
       </div>
       <div class="score-card-details">
         <div class="score-detail-row">
-          <span>距離</span><span id="sc-distance">--</span>
+          <span>打上げまで</span><span id="sc-distance">--</span>
         </div>
         <div class="score-detail-row">
-          <span>仰角</span><span id="sc-angle">--</span>
+          <span>見上げる角度</span><span id="sc-angle">--</span>
         </div>
         <div class="score-detail-row">
-          <span>標高差</span><span id="sc-elevation">--</span>
+          <span>高さの差</span><span id="sc-elevation">--</span>
         </div>
         <div class="score-detail-row">
-          <span>視界</span><span id="sc-los">--</span>
+          <span>さえぎるもの</span><span id="sc-los">--</span>
         </div>
         <div class="score-card-bar">
           <div class="bar-item">
             <div class="bar-track"><div class="bar-fill" id="bar-angle" style="width:0"></div></div>
-            <span>仰角</span>
+            <span>角度</span>
           </div>
           <div class="bar-item">
             <div class="bar-track"><div class="bar-fill bar-green" id="bar-los" style="width:0"></div></div>
@@ -85,7 +85,7 @@
           </div>
           <div class="bar-item">
             <div class="bar-track"><div class="bar-fill bar-yellow" id="bar-slope" style="width:0"></div></div>
-            <span>勾配</span>
+            <span>地形</span>
           </div>
         </div>
         <div class="score-reason" id="sc-reason"></div>
@@ -99,17 +99,17 @@
       </div>
       <div id="loading" class="hidden">
         <div class="spinner"></div>
-        <p id="loading-text">地形データを分析中...</p>
+        <p id="loading-text">ベストスポットを探しています…</p>
         <div class="loading-steps" id="loading-steps">
-          <div class="loading-step" data-step="grid"><span class="step-icon">○</span>グリッド生成</div>
-          <div class="loading-step" data-step="elevation"><span class="step-icon">○</span>標高データ取得</div>
-          <div class="loading-step" data-step="scoring"><span class="step-icon">○</span>スコア計算</div>
+          <div class="loading-step" data-step="grid"><span class="step-icon">○</span>周辺を調査中</div>
+          <div class="loading-step" data-step="elevation"><span class="step-icon">○</span>地形を読み取り中</div>
+          <div class="loading-step" data-step="scoring"><span class="step-icon">○</span>おすすめを選定中</div>
         </div>
       </div>
     </div>
 
     <div id="results" class="hidden">
-      <h2>おすすめポジション</h2>
+      <h2>おすすめスポット</h2>
       <div id="results-list"></div>
     </div>
   </div>

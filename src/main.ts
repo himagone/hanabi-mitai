@@ -188,10 +188,26 @@ async function runDesktopAnalysis(): Promise<void> {
 }
 
 function scoreQualityLabel(percent: number): { text: string; cls: string } {
-  if (percent >= 70) return { text: '最適', cls: 'excellent' };
-  if (percent >= 50) return { text: '良好', cls: 'good' };
-  if (percent >= 30) return { text: 'まあまあ', cls: 'fair' };
-  return { text: '不向き', cls: 'poor' };
+  if (percent >= 70) return { text: 'よく見える', cls: 'excellent' };
+  if (percent >= 50) return { text: 'そこそこ見える', cls: 'good' };
+  if (percent >= 30) return { text: 'ちょっと厳しい', cls: 'fair' };
+  return { text: '見えにくい', cls: 'poor' };
+}
+
+function formatDistance(meters: number): string {
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(1)}km`;
+  }
+  return `${meters}m`;
+}
+
+function distanceWithWalk(meters: number): string {
+  const walkMin = Math.round(meters / 80); // 徒歩 80m/min
+  const dist = formatDistance(meters);
+  if (walkMin <= 60) {
+    return `${dist}（徒歩${walkMin}分）`;
+  }
+  return dist;
 }
 
 function showDesktopResults(response: AnalyzeResponse): void {
@@ -199,7 +215,7 @@ function showDesktopResults(response: AnalyzeResponse): void {
 
   const summary = document.createElement('p');
   summary.style.cssText = 'font-size:0.8rem;color:#888;margin-bottom:12px;';
-  summary.textContent = `${response.totalPointsAnalyzed}地点を分析（打上地点標高: ${response.launchSiteElevation.toFixed(1)}m）`;
+  summary.textContent = `${response.totalPointsAnalyzed}ヶ所を調べました`;
   resultsListEl.appendChild(summary);
 
   response.topPositions.slice(0, 10).forEach((p, i) => {
@@ -215,15 +231,15 @@ function showDesktopResults(response: AnalyzeResponse): void {
       <span class="score">${scorePercent}点</span>
       <span class="score-quality ${quality.cls}">${quality.text}</span>
       <div class="details">
-        距離: ${p.distanceMeters}m / 仰角: ${p.viewingAngleDeg}° / 標高差: ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m
+        打上げまで ${distanceWithWalk(p.distanceMeters)}
       </div>
       <div class="reason">${p.reason}</div>
       <div class="score-bar">
-        <div class="segment" style="flex:${p.score.viewingAngle};background:#3b82f6;" title="仰角"></div>
-        <div class="segment" style="flex:${p.score.lineOfSight};background:#22c55e;" title="視線"></div>
+        <div class="segment" style="flex:${p.score.viewingAngle};background:#3b82f6;" title="角度"></div>
+        <div class="segment" style="flex:${p.score.lineOfSight};background:#22c55e;" title="視界"></div>
         <div class="segment" style="flex:${p.score.accessibility};background:#a855f7;" title="場所"></div>
-        <div class="segment" style="flex:${p.score.elevation};background:#8b5cf6;" title="標高"></div>
-        <div class="segment" style="flex:${p.score.slope};background:#f59e0b;" title="勾配"></div>
+        <div class="segment" style="flex:${p.score.elevation};background:#8b5cf6;" title="高さ"></div>
+        <div class="segment" style="flex:${p.score.slope};background:#f59e0b;" title="地形"></div>
       </div>
     `;
     resultsListEl.appendChild(card);
@@ -270,13 +286,13 @@ async function runMobileScore(): Promise<void> {
 
   if (isNaN(lat) || isNaN(lng)) {
     editorHint.classList.remove('hidden');
-    editorHintText.textContent = 'まず花火大会を選んでください ↑';
+    editorHintText.textContent = 'まず花火大会を選んでね ↑';
     return;
   }
 
   if (scoreHereBtn) {
     scoreHereBtn.disabled = true;
-    scoreHereBtn.textContent = '位置情報を取得中...';
+    scoreHereBtn.textContent = '位置を取得中…';
   }
 
   try {
@@ -288,10 +304,10 @@ async function runMobileScore(): Promise<void> {
     mobileManualMode = true;
     if (scoreHereBtn) {
       scoreHereBtn.disabled = false;
-      scoreHereBtn.textContent = '現在地のスコアを確認';
+      scoreHereBtn.textContent = 'ここから見える？';
     }
     editorHint.classList.remove('hidden');
-    editorHintText.textContent = '地図をタップして現在地を指定してください';
+    editorHintText.textContent = '地図をタップして場所を選んでください';
   }
 }
 
@@ -301,7 +317,7 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
 
   if (scoreHereBtn) {
     scoreHereBtn.disabled = true;
-    scoreHereBtn.textContent = 'スコアを計算中...';
+    scoreHereBtn.textContent = '調べています…';
   }
   loadingEl.classList.remove('hidden');
   editorHint.classList.add('hidden');
@@ -326,7 +342,7 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
     loadingEl.classList.add('hidden');
     if (scoreHereBtn) {
       scoreHereBtn.disabled = false;
-      scoreHereBtn.textContent = '現在地のスコアを確認';
+      scoreHereBtn.textContent = 'ここから見える？';
     }
   }
 }
@@ -351,12 +367,13 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   scoreLabelEl.textContent = `ここからの見やすさ — ${quality.text}`;
 
   // Details
-  document.getElementById('sc-distance')!.textContent = `${v.distanceMeters}m`;
+  document.getElementById('sc-distance')!.textContent = distanceWithWalk(v.distanceMeters);
   document.getElementById('sc-angle')!.textContent = `${v.viewingAngleDeg}°`;
   document.getElementById('sc-elevation')!.textContent =
     `${v.relativeElevation > 0 ? '+' : ''}${v.relativeElevation}m`;
+  const losPercent = Math.round(v.score.lineOfSight * 100);
   document.getElementById('sc-los')!.textContent =
-    `${Math.round(v.score.lineOfSight * 100)}%`;
+    losPercent >= 90 ? 'なし' : losPercent >= 50 ? '少しあり' : 'あり';
 
   // Bars
   (document.getElementById('bar-angle') as HTMLElement).style.width = `${v.score.viewingAngle * 100}%`;
@@ -387,7 +404,7 @@ presetSelect.addEventListener('change', () => {
     clearViewerMarker();
     // タップでもスコア確認できることを案内
     editorHint.classList.remove('hidden');
-    editorHintText.textContent = '地図をタップ、またはボタンで現在地のスコアを確認';
+    editorHintText.textContent = '地図をタップして花火の見え方をチェック';
   }
 });
 
