@@ -73,30 +73,13 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const candidates = quickResults.slice(0, TOP_N);
   const rest = quickResults.slice(TOP_N);
 
-  // 5. パス2: 上位候補の LOS・勾配用のタイルを事前取得
+  // 5. パス2: 上位候補の勾配用のタイルを事前取得
+  // (LOS は建物ポリゴン交差ベースのため事前サンプリング不要)
   const prefetchPoints: import('./types.js').LatLng[] = [];
   const SLOPE_DELTA = 0.0003;
 
   for (const c of candidates) {
     const p = c.point;
-    const dist = c.dist;
-    // LOS サンプル点: 近距離20m間隔、遠距離100m間隔
-    const nearThreshold = Math.min(200, dist * 0.3);
-    for (let d = 20; d <= nearThreshold; d += 20) {
-      const t = d / dist;
-      prefetchPoints.push({
-        lat: p.lat + (launchSite.lat - p.lat) * t,
-        lng: p.lng + (launchSite.lng - p.lng) * t,
-      });
-    }
-    for (let d = Math.max(nearThreshold, 100); d < dist; d += 100) {
-      const t = d / dist;
-      if (t > 0.95) break;
-      prefetchPoints.push({
-        lat: p.lat + (launchSite.lat - p.lat) * t,
-        lng: p.lng + (launchSite.lng - p.lng) * t,
-      });
-    }
     // 勾配の隣接点
     prefetchPoints.push(
       { lat: p.lat + SLOPE_DELTA, lng: p.lng },
@@ -193,33 +176,15 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
     throw new Error('現在地の標高データを取得できませんでした');
   }
 
-  // LOS・勾配用のタイルを事前取得
-  const prefetchPoints: import('./types.js').LatLng[] = [];
+  // 勾配用のタイルを事前取得
+  // (LOS は建物ポリゴン交差ベースのため事前サンプリング不要)
   const SLOPE_DELTA = 0.0003;
-
-  // LOS サンプル点: 近距離20m間隔、遠距離100m間隔
-  const nearThreshold = Math.min(200, dist * 0.3);
-  for (let d = 20; d <= nearThreshold; d += 20) {
-    const t = d / dist;
-    prefetchPoints.push({
-      lat: viewerLocation.lat + (launchSite.lat - viewerLocation.lat) * t,
-      lng: viewerLocation.lng + (launchSite.lng - viewerLocation.lng) * t,
-    });
-  }
-  for (let d = Math.max(nearThreshold, 100); d < dist; d += 100) {
-    const t = d / dist;
-    if (t > 0.95) break;
-    prefetchPoints.push({
-      lat: viewerLocation.lat + (launchSite.lat - viewerLocation.lat) * t,
-      lng: viewerLocation.lng + (launchSite.lng - viewerLocation.lng) * t,
-    });
-  }
-  prefetchPoints.push(
+  const prefetchPoints: import('./types.js').LatLng[] = [
     { lat: viewerLocation.lat + SLOPE_DELTA, lng: viewerLocation.lng },
     { lat: viewerLocation.lat - SLOPE_DELTA, lng: viewerLocation.lng },
     { lat: viewerLocation.lat, lng: viewerLocation.lng + SLOPE_DELTA },
     { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
-  );
+  ];
   await getElevationBatch(prefetchPoints);
 
   const viewer = await fullScorePoint(

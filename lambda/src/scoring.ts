@@ -141,40 +141,42 @@ function generateReason(
 ): string {
   const reasons: string[] = [];
 
-  // 距離が遠すぎる場合はそれだけ返す
+  // 距離が遠すぎる場合
   if (scores.distance < 0.05) {
-    return `${Math.round(distanceMeters / 1000)}km離れていて、花火はほぼ見えません`;
+    return '遠すぎて視認困難';
   }
   if (scores.distance < 0.3) {
-    reasons.push(`${(distanceMeters / 1000).toFixed(1)}km離れていて、花火は小さく見えます`);
+    reasons.push('距離が遠い');
   }
 
   if (scores.accessibility >= 0.9) {
-    reasons.push('公園や広場で観やすい');
+    reasons.push('公園・広場');
   } else if (scores.accessibility <= 0.2) {
-    reasons.push('住宅地のため観覧しづらい');
+    reasons.push('住宅地');
   }
 
   if (scores.lineOfSight >= 0.9) {
-    reasons.push('花火までさえぎるものがない');
+    reasons.push('遮蔽なし');
   } else if (scores.lineOfSight >= 0.5) {
-    reasons.push('おおむね見通しがきく');
+    reasons.push('見通し良');
+  } else if (scores.lineOfSight < 0.3) {
+    reasons.push('建物で遮蔽あり');
   }
 
   if (viewingAngleDeg >= 50 && viewingAngleDeg <= 70) {
-    reasons.push('ちょうどいい角度で見上げられる');
+    reasons.push('仰角良好');
   } else if (viewingAngleDeg >= 30 && viewingAngleDeg < 50) {
-    reasons.push('やや遠くに見える角度');
+    reasons.push('仰角やや低い');
   }
 
   if (relativeElevation > 10) {
-    reasons.push(`打上げ場所より${Math.round(relativeElevation)}m高い場所`);
+    reasons.push(`+${Math.round(relativeElevation)}m`);
   } else if (relativeElevation > 3) {
-    reasons.push('少し高い場所');
+    reasons.push('やや高台');
   }
 
   if (scores.slope > 0.7) {
-    reasons.push('花火の方角に開けている');
+    reasons.push('開けた方角');
   }
 
   return reasons.length > 0 ? reasons.join('、') : '';

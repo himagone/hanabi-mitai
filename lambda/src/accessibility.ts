@@ -11,7 +11,7 @@ interface LandUsePolygon {
   coords: [number, number][]; // [lng, lat][]
 }
 
-interface BuildingPolygon {
+export interface BuildingPolygon {
   coords: [number, number][]; // [lng, lat][]
   height: number; // メートル
   // バウンディングボックス（高速フィルタ用）
@@ -19,6 +19,13 @@ interface BuildingPolygon {
   maxLng: number;
   minLat: number;
   maxLat: number;
+}
+
+/**
+ * キャッシュ済み建物データを返す
+ */
+export function getCachedBuildings(): BuildingPolygon[] {
+  return cachedBuildings ?? [];
 }
 
 let cachedLandUse: LandUsePolygon[] | null = null;
@@ -252,56 +259,6 @@ export function getBuildingHeight(lng: number, lat: number): number {
   }
 
   return 0;
-}
-
-/**
- * 指定地点の周辺にある建物の最大高さを返す
- * margin は緯度経度の度数（約0.0001° ≈ 11m）
- */
-export function getMaxBuildingHeightNear(lng: number, lat: number, margin: number): number {
-  if (!cachedBuildings || cachedBuildings.length === 0) return 0;
-
-  let maxHeight = 0;
-  for (const building of cachedBuildings) {
-    // バウンディングボックスが検索範囲と重なるか
-    if (building.maxLng < lng - margin || building.minLng > lng + margin ||
-        building.maxLat < lat - margin || building.minLat > lat + margin) continue;
-
-    // 建物のBBoxが検索範囲と重なっていれば、視線を遮る可能性がある
-    if (building.height > maxHeight) {
-      // 点がポリゴン内か、またはBBoxが視線の近傍を通過しているか
-      if (pointInPolygon(lng, lat, building.coords) ||
-          isNearPolygon(lng, lat, building.coords, margin)) {
-        maxHeight = building.height;
-      }
-    }
-  }
-
-  return maxHeight;
-}
-
-/**
- * 点がポリゴンの辺の近傍（margin以内）にあるか
- */
-function isNearPolygon(lng: number, lat: number, polygon: [number, number][], margin: number): boolean {
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [x1, y1] = polygon[j];
-    const [x2, y2] = polygon[i];
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const len2 = dx * dx + dy * dy;
-    if (len2 === 0) continue;
-    // 点から辺への最近接点のパラメータ t
-    const t = Math.max(0, Math.min(1, ((lng - x1) * dx + (lat - y1) * dy) / len2));
-    const nearX = x1 + t * dx;
-    const nearY = y1 + t * dy;
-    const distX = lng - nearX;
-    const distY = lat - nearY;
-    if (distX * distX + distY * distY < margin * margin) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /**

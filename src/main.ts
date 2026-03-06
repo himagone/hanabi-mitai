@@ -135,7 +135,7 @@ async function runDesktopAnalysis(): Promise<void> {
   isAnalyzing = true;
   analyzeBtn.disabled = true;
   const loadingTextEl = document.getElementById('loading-text');
-  if (loadingTextEl) loadingTextEl.textContent = 'ベストスポットを探しています…';
+  if (loadingTextEl) loadingTextEl.textContent = '分析中…';
   loadingEl.classList.remove('hidden');
   resultsEl.classList.add('hidden');
   clearResults();
@@ -190,10 +190,10 @@ async function runDesktopAnalysis(): Promise<void> {
 }
 
 function scoreQualityLabel(percent: number): { text: string; cls: string } {
-  if (percent >= 70) return { text: 'よく見える', cls: 'excellent' };
-  if (percent >= 50) return { text: 'そこそこ見える', cls: 'good' };
-  if (percent >= 30) return { text: 'ちょっと厳しい', cls: 'fair' };
-  return { text: '見えにくい', cls: 'poor' };
+  if (percent >= 70) return { text: '◎', cls: 'excellent' };
+  if (percent >= 50) return { text: '○', cls: 'good' };
+  if (percent >= 30) return { text: '△', cls: 'fair' };
+  return { text: '×', cls: 'poor' };
 }
 
 function formatDistance(meters: number): string {
@@ -322,7 +322,7 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
     scoreHereBtn.textContent = '調べています…';
   }
   const loadingTextEl = document.getElementById('loading-text');
-  if (loadingTextEl) loadingTextEl.textContent = 'この場所の見え方を調べています…';
+  if (loadingTextEl) loadingTextEl.textContent = '計算中…';
   loadingEl.classList.remove('hidden');
   editorHint.classList.add('hidden');
   mobileManualMode = false;
@@ -368,7 +368,7 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   else mainEl.style.borderLeftColor = '#ef4444';
 
   const scoreLabelEl = mobileScoreCard.querySelector('.score-label') as HTMLElement;
-  scoreLabelEl.textContent = `ここからの見やすさ — ${quality.text}`;
+  scoreLabelEl.textContent = quality.text;
 
   // Details
   document.getElementById('sc-distance')!.textContent = distanceWithWalk(v.distanceMeters);

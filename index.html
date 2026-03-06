@@ -10,7 +10,7 @@
   <div id="app">
     <header id="header">
       <h1>花火みたい</h1>
-      <p class="subtitle">花火がよく見える場所を探そう</p>
+      <p class="subtitle">花火の見える場所を探す</p>
     </header>
 
     <div id="controls">
@@ -62,13 +62,13 @@
           <span>打上げまで</span><span id="sc-distance">--</span>
         </div>
         <div class="score-detail-row">
-          <span>見上げる角度</span><span id="sc-angle">--</span>
+          <span>仰角</span><span id="sc-angle">--</span>
         </div>
         <div class="score-detail-row">
-          <span>高さの差</span><span id="sc-elevation">--</span>
+          <span>標高差</span><span id="sc-elevation">--</span>
         </div>
         <div class="score-detail-row">
-          <span>さえぎるもの</span><span id="sc-los">--</span>
+          <span>遮蔽</span><span id="sc-los">--</span>
         </div>
         <div class="score-card-bar">
           <div class="bar-item">
@@ -99,11 +99,11 @@
       </div>
       <div id="loading" class="hidden">
         <div class="spinner"></div>
-        <p id="loading-text">ベストスポットを探しています…</p>
+        <p id="loading-text">分析中…</p>
         <div class="loading-steps desktop-only" id="loading-steps">
-          <div class="loading-step" data-step="grid"><span class="step-icon">○</span>周辺を調査中</div>
-          <div class="loading-step" data-step="elevation"><span class="step-icon">○</span>地形を読み取り中</div>
-          <div class="loading-step" data-step="scoring"><span class="step-icon">○</span>おすすめを選定中</div>
+          <div class="loading-step" data-step="grid"><span class="step-icon">○</span>周辺調査</div>
+          <div class="loading-step" data-step="elevation"><span class="step-icon">○</span>地形解析</div>
+          <div class="loading-step" data-step="scoring"><span class="step-icon">○</span>スコアリング</div>
         </div>
       </div>
     </div>
