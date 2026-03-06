@@ -7,6 +7,9 @@ import { accessibilityScore } from './accessibility.js';
 /** 花火の開花高度 (打上地点の地上からの高さ, m) */
 const FIREWORK_ALTITUDE = 250;
 
+/** 花火の開花直径 (10号玉想定, m) */
+const FIREWORK_BLOOM_DIAMETER = 280;
+
 /** スコアの重み */
 const WEIGHTS = {
   viewingAngle: 0.20,
@@ -15,6 +18,37 @@ const WEIGHTS = {
   slope: 0.10,
   accessibility: 0.25,
 };
+
+/**
+ * 距離に基づく視認性スコア
+ *
+ * 花火の見かけの角度サイズと大気による減衰を考慮。
+ * 全体スコアの乗数として使用し、遠距離では強制的にスコアを下げる。
+ *
+ * - 10号玉(280m): ~3km で見かけ約5°(良好), ~10km で約1.6°(小さい), ~30km で約0.5°(ほぼ見えない)
+ * - 大気: 晴天でも15km以上はかすみで急激に劣化
+ *
+ * @returns 0.0（見えない）〜 1.0（十分な大きさで見える）
+ */
+function distanceVisibilityScore(distanceMeters: number): number {
+  // 花火の見かけの角度サイズ (度)
+  const apparentAngleDeg = Math.atan2(FIREWORK_BLOOM_DIAMETER, distanceMeters) * 180 / Math.PI;
+
+  // 見かけサイズスコア: 3°以上で良好、0.5°以下でほぼ見えない
+  let sizeScore: number;
+  if (apparentAngleDeg >= 3) {
+    sizeScore = 1.0;
+  } else if (apparentAngleDeg >= 0.5) {
+    sizeScore = (apparentAngleDeg - 0.5) / (3 - 0.5);
+  } else {
+    sizeScore = 0;
+  }
+
+  // 大気減衰: 3km以内はペナルティなし、それ以降は指数減衰
+  const atmosphericScore = Math.exp(-Math.max(0, distanceMeters - 3000) / 10000);
+
+  return sizeScore * atmosphericScore;
+}
 
 /**
  * 仰角スコア
@@ -97,10 +131,18 @@ function slopeScore(
 function generateReason(
   scores: ScoreBreakdown,
   relativeElevation: number,
-  _distanceMeters: number,
+  distanceMeters: number,
   viewingAngleDeg: number,
 ): string {
   const reasons: string[] = [];
+
+  // 距離が遠すぎる場合はそれだけ返す
+  if (scores.distance < 0.05) {
+    return `距離${Math.round(distanceMeters / 1000)}km — 遠すぎて花火はほぼ見えません`;
+  }
+  if (scores.distance < 0.3) {
+    reasons.push(`距離${(distanceMeters / 1000).toFixed(1)}km — 花火はかなり小さく見えます`);
+  }
 
   if (scores.accessibility >= 0.9) {
     reasons.push('公園・広場');
@@ -153,10 +195,12 @@ export function quickScorePoint(
   const elevScore = elevationScore(relElev);
   const accessScore = accessibilityScore(point);
 
-  const quickScore =
+  const distVisibility = distanceVisibilityScore(dist);
+  const baseScore =
     WEIGHTS.viewingAngle * angleScore +
     WEIGHTS.elevation * elevScore +
     WEIGHTS.accessibility * accessScore;
+  const quickScore = baseScore * distVisibility;
 
   return { dist, relElev, angleDeg, quickScore };
 }
@@ -198,18 +242,22 @@ export async function fullScorePoint(
 
   const accessScore = accessibilityScore(point);
 
+  const distVisibility = distanceVisibilityScore(dist);
+  const baseTotal =
+    WEIGHTS.viewingAngle * angleScore +
+    WEIGHTS.elevation * elevScore +
+    WEIGHTS.lineOfSight * losScore +
+    WEIGHTS.slope * slopeS +
+    WEIGHTS.accessibility * accessScore;
+
   const scores: ScoreBreakdown = {
+    distance: distVisibility,
     viewingAngle: angleScore,
     elevation: elevScore,
     lineOfSight: losScore,
     slope: slopeS,
     accessibility: accessScore,
-    total:
-      WEIGHTS.viewingAngle * angleScore +
-      WEIGHTS.elevation * elevScore +
-      WEIGHTS.lineOfSight * losScore +
-      WEIGHTS.slope * slopeS +
-      WEIGHTS.accessibility * accessScore,
+    total: baseTotal * distVisibility,
   };
 
   return {

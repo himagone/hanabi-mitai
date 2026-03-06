@@ -29,6 +29,7 @@ export interface AnalyzeRequest {
 
 /** スコアの内訳 */
 export interface ScoreBreakdown {
+  distance: number;
   viewingAngle: number;
   elevation: number;
   lineOfSight: number;
