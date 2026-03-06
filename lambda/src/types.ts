@@ -12,6 +12,7 @@ export interface AnalyzeRequest {
   launchSite: LatLng;
   radiusMeters: number;
   exclusionZones?: ExclusionZone[];
+  fireworkDiameter?: number;
 }
 
 /** スコアの内訳 */
@@ -51,6 +52,7 @@ export interface AnalyzeResponse {
 export interface ScorePointRequest {
   launchSite: LatLng;
   viewerLocation: LatLng;
+  fireworkDiameter?: number;
 }
 
 /** 単一地点スコアレスポンス */

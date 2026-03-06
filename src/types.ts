@@ -11,6 +11,7 @@ export type ExclusionZone = [number, number][]; // [lng, lat][]
 export interface ScorePointRequest {
   launchSite: LatLng;
   viewerLocation: LatLng;
+  fireworkDiameter?: number;
 }
 
 /** 単一地点スコアレスポンス */
@@ -25,6 +26,7 @@ export interface AnalyzeRequest {
   launchSite: LatLng;
   radiusMeters: number;
   exclusionZones?: ExclusionZone[];
+  fireworkDiameter?: number;
 }
 
 /** スコアの内訳 */

@@ -45,6 +45,8 @@ const scoreHereBtn = document.getElementById('score-here-btn') as HTMLButtonElem
 const mobileScoreCard = document.getElementById('mobile-score-card') as HTMLElement | null;
 
 let isAnalyzing = false;
+let mobileManualMode = false; // GPS失敗時に地図タップで現在地指定
+let currentFireworkDiameter: number | undefined;
 
 // Apply mobile class for CSS
 if (isMobile) {
@@ -141,6 +143,7 @@ async function runDesktopAnalysis(): Promise<void> {
       launchSite: { lat, lng },
       radiusMeters,
       exclusionZones: exclusionZones.length > 0 ? exclusionZones : undefined,
+      fireworkDiameter: currentFireworkDiameter,
     });
 
     renderResults(response);
@@ -236,28 +239,50 @@ async function runMobileScore(): Promise<void> {
     scoreHereBtn.disabled = true;
     scoreHereBtn.textContent = '位置情報を取得中...';
   }
-  loadingEl.classList.remove('hidden');
 
   try {
     const pos = await getCurrentPosition();
-    const viewerLat = pos.coords.latitude;
-    const viewerLng = pos.coords.longitude;
+    await scoreFromLocation(pos.coords.latitude, pos.coords.longitude);
+  } catch (err) {
+    console.error('GPS failed:', err);
+    // GPS失敗 → 地図タップモードに切り替え
+    mobileManualMode = true;
+    if (scoreHereBtn) {
+      scoreHereBtn.disabled = false;
+      scoreHereBtn.textContent = '現在地のスコアを確認';
+    }
+    editorHint.classList.remove('hidden');
+    editorHintText.textContent = '地図をタップして現在地を指定してください';
+  }
+}
 
-    if (scoreHereBtn) scoreHereBtn.textContent = 'スコアを計算中...';
+async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<void> {
+  const lat = parseFloat(latInput.value);
+  const lng = parseFloat(lngInput.value);
 
+  if (scoreHereBtn) {
+    scoreHereBtn.disabled = true;
+    scoreHereBtn.textContent = 'スコアを計算中...';
+  }
+  loadingEl.classList.remove('hidden');
+  editorHint.classList.add('hidden');
+  mobileManualMode = false;
+
+  try {
     setViewerMarker(viewerLat, viewerLng);
     fitToLaunchAndViewer();
 
     const response = await scorePoint({
       launchSite: { lat, lng },
       viewerLocation: { lat: viewerLat, lng: viewerLng },
+      fireworkDiameter: currentFireworkDiameter,
     });
 
     showMobileScoreCard(response);
   } catch (err) {
     console.error('Score failed:', err);
     const message = err instanceof Error ? err.message : '不明なエラー';
-    alert(message);
+    alert(`スコア計算に失敗しました: ${message}`);
   } finally {
     loadingEl.classList.add('hidden');
     if (scoreHereBtn) {
@@ -310,17 +335,30 @@ presetSelect.addEventListener('change', () => {
   const value = presetSelect.value;
   if (!value) return;
   const [lat, lng] = value.split(',').map(Number);
+  const selectedOption = presetSelect.selectedOptions[0];
+  const diameterAttr = selectedOption?.getAttribute('data-diameter');
+  currentFireworkDiameter = diameterAttr ? parseInt(diameterAttr, 10) : undefined;
   setLaunchSite(lat, lng);
-  // Mobile: hide old score when switching
   if (isMobile) {
     mobileScoreCard?.classList.add('hidden');
     clearViewerMarker();
+    // タップでもスコア確認できることを案内
+    editorHint.classList.remove('hidden');
+    editorHintText.textContent = '地図をタップ、またはボタンで現在地のスコアを確認';
   }
 });
 
 initMap('map', (lat, lng) => {
   if (isAnalyzing) return;
-  if (isMobile) return; // mobile: don't set launch by map click
+  if (isMobile) {
+    // モバイル: 打上地点が設定済みなら地図タップでスコア計算
+    const launchLat = parseFloat(latInput.value);
+    const launchLng = parseFloat(lngInput.value);
+    if (!isNaN(launchLat) && !isNaN(launchLng)) {
+      scoreFromLocation(lat, lng);
+    }
+    return;
+  }
   presetSelect.value = '';
   setLaunchSite(lat, lng);
 });

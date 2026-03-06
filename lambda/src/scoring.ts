@@ -4,11 +4,15 @@ import { getElevation } from './elevation.js';
 import { checkLineOfSight } from './line-of-sight.js';
 import { accessibilityScore } from './accessibility.js';
 
-/** 花火の開花高度 (打上地点の地上からの高さ, m) */
-const FIREWORK_ALTITUDE = 250;
+/** デフォルトの花火開花直径 (m) — リクエストで指定がない場合 */
+const DEFAULT_FIREWORK_DIAMETER = 150;
 
-/** 花火の開花直径 (10号玉想定, m) */
-const FIREWORK_BLOOM_DIAMETER = 280;
+/** 直径から開花高度を推定 (打上地点の地上からの高さ, m) */
+function estimateAltitude(diameter: number): number {
+  // 号数ごとの実績値に基づく線形近似
+  // 4号(120m径)→130m高, 5号(150m径)→170m高, 10号(280m径)→250m高
+  return 50 + diameter * 0.72;
+}
 
 /** スコアの重み */
 const WEIGHTS = {
@@ -30,9 +34,9 @@ const WEIGHTS = {
  *
  * @returns 0.0（見えない）〜 1.0（十分な大きさで見える）
  */
-function distanceVisibilityScore(distanceMeters: number): number {
+function distanceVisibilityScore(distanceMeters: number, bloomDiameter: number): number {
   // 花火の見かけの角度サイズ (度)
-  const apparentAngleDeg = Math.atan2(FIREWORK_BLOOM_DIAMETER, distanceMeters) * 180 / Math.PI;
+  const apparentAngleDeg = Math.atan2(bloomDiameter, distanceMeters) * 180 / Math.PI;
 
   // 見かけサイズスコア: 3°以上で良好、0.5°以下でほぼ見えない
   let sizeScore: number;
@@ -57,9 +61,10 @@ function viewingAngleScore(
   distanceMeters: number,
   viewerElevation: number,
   launchSiteElevation: number,
+  fireworkAltitude: number,
 ): { score: number; angleDeg: number } {
   const viewerEyeHeight = viewerElevation + 1.5;
-  const fireworkHeight = launchSiteElevation + FIREWORK_ALTITUDE;
+  const fireworkHeight = launchSiteElevation + fireworkAltitude;
   const heightAboveViewer = fireworkHeight - viewerEyeHeight;
 
   if (heightAboveViewer <= 0) {
@@ -183,19 +188,22 @@ export function quickScorePoint(
   point: GridPoint,
   launchSite: LatLng,
   launchSiteElevation: number,
+  fireworkDiameter: number = DEFAULT_FIREWORK_DIAMETER,
 ): { dist: number; relElev: number; angleDeg: number; quickScore: number } {
   const dist = haversineDistance(point, launchSite);
   const relElev = point.elevation - launchSiteElevation;
+  const altitude = estimateAltitude(fireworkDiameter);
 
   const { score: angleScore, angleDeg } = viewingAngleScore(
     dist,
     point.elevation,
     launchSiteElevation,
+    altitude,
   );
   const elevScore = elevationScore(relElev);
   const accessScore = accessibilityScore(point);
 
-  const distVisibility = distanceVisibilityScore(dist);
+  const distVisibility = distanceVisibilityScore(dist, fireworkDiameter);
   const baseScore =
     WEIGHTS.viewingAngle * angleScore +
     WEIGHTS.elevation * elevScore +
@@ -212,14 +220,17 @@ export async function fullScorePoint(
   point: GridPoint,
   launchSite: LatLng,
   launchSiteElevation: number,
+  fireworkDiameter: number = DEFAULT_FIREWORK_DIAMETER,
 ): Promise<ScoredPoint> {
   const dist = haversineDistance(point, launchSite);
   const relElev = point.elevation - launchSiteElevation;
+  const altitude = estimateAltitude(fireworkDiameter);
 
   const { score: angleScore, angleDeg } = viewingAngleScore(
     dist,
     point.elevation,
     launchSiteElevation,
+    altitude,
   );
 
   const elevScore = elevationScore(relElev);
@@ -242,7 +253,7 @@ export async function fullScorePoint(
 
   const accessScore = accessibilityScore(point);
 
-  const distVisibility = distanceVisibilityScore(dist);
+  const distVisibility = distanceVisibilityScore(dist, fireworkDiameter);
   const baseTotal =
     WEIGHTS.viewingAngle * angleScore +
     WEIGHTS.elevation * elevScore +

@@ -24,7 +24,7 @@ function errorResponse(statusCode: number, message: string): APIGatewayProxyResu
  * メインの分析処理
  */
 async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
-  const { launchSite, radiusMeters } = request;
+  const { launchSite, radiusMeters, fireworkDiameter } = request;
 
   // グリッド間隔をエリアサイズに応じて調整
   const spacing = radiusMeters <= 1000 ? 40 : radiusMeters <= 2000 ? 50 : 70;
@@ -64,7 +64,7 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const quickResults = gridPoints.map((point, idx) => ({
     idx,
     point,
-    ...quickScorePoint(point, launchSite, launchSiteElevation),
+    ...quickScorePoint(point, launchSite, launchSiteElevation, fireworkDiameter),
   }));
 
   // 事前スコアでソートし、上位候補を抽出
@@ -100,7 +100,7 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
 
   // フルスコアリング（タイルはキャッシュ済みなので高速）
   const scoredTop = await Promise.all(
-    candidates.map((c) => fullScorePoint(c.point, launchSite, launchSiteElevation)),
+    candidates.map((c) => fullScorePoint(c.point, launchSite, launchSiteElevation, fireworkDiameter)),
   );
 
   scoredTop.sort((a, b) => b.score.total - a.score.total);
@@ -167,7 +167,7 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
  * 単一地点のスコアリング
  */
 async function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
-  const { launchSite, viewerLocation } = request;
+  const { launchSite, viewerLocation, fireworkDiameter } = request;
 
   const dist = haversineDistance(launchSite, viewerLocation);
   const osmRadius = Math.min(Math.max(dist + 500, 1000), 5000);
@@ -208,6 +208,7 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
     { lat: viewerLocation.lat, lng: viewerLocation.lng, elevation: viewerElevation },
     launchSite,
     launchSiteElevation,
+    fireworkDiameter,
   );
 
   return { launchSite, launchSiteElevation, viewer };
@@ -280,6 +281,7 @@ export async function handler(
       launchSite: request.launchSite,
       radiusMeters,
       exclusionZones: request.exclusionZones,
+      fireworkDiameter: request.fireworkDiameter,
     });
 
     return {
