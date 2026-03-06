@@ -99,7 +99,12 @@
       </div>
       <div id="loading" class="hidden">
         <div class="spinner"></div>
-        <p>地形データを分析中...</p>
+        <p id="loading-text">地形データを分析中...</p>
+        <div class="loading-steps" id="loading-steps">
+          <div class="loading-step" data-step="grid"><span class="step-icon">○</span>グリッド生成</div>
+          <div class="loading-step" data-step="elevation"><span class="step-icon">○</span>標高データ取得</div>
+          <div class="loading-step" data-step="scoring"><span class="step-icon">○</span>スコア計算</div>
+        </div>
       </div>
     </div>
 

@@ -212,6 +212,37 @@ body {
   color: #ff6b35;
 }
 
+/* Goal Gradient: loading steps */
+.loading-steps {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #666;
+}
+
+.loading-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.3s;
+}
+
+.loading-step.active {
+  color: #ff6b35;
+}
+
+.loading-step.done {
+  color: #22c55e;
+}
+
+.loading-step .step-icon {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .spinner {
   width: 40px;
   height: 40px;
@@ -243,7 +274,28 @@ body {
   overflow-y: auto;
   z-index: 5;
   backdrop-filter: blur(10px);
+  animation: fade-in 0.3s ease-out;
 }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Score quality label — Framing Effect */
+.score-quality {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.score-quality.excellent { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+.score-quality.good { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.score-quality.fair { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+.score-quality.poor { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
 
 #results h2 {
   font-size: 1rem;
@@ -258,11 +310,25 @@ body {
   padding: 12px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, transform 0.2s;
+  animation: card-slide-in 0.3s ease-out both;
 }
 
 .result-card:hover {
   border-color: #ff6b35;
+  transform: translateX(4px);
+}
+
+/* Von Restorff: 1位を視覚的に差別化 */
+.result-card.rank-1 {
+  border-color: #ff6b35;
+  background: linear-gradient(135deg, #1a1020 0%, #1a1428 100%);
+  box-shadow: 0 0 12px rgba(255, 107, 53, 0.15);
+}
+
+@keyframes card-slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .result-card .rank {
@@ -277,6 +343,14 @@ body {
   font-size: 0.75rem;
   font-weight: bold;
   margin-right: 8px;
+}
+
+.result-card.rank-1 .rank {
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  font-size: 0.85rem;
+  box-shadow: 0 0 8px rgba(255, 107, 53, 0.4);
 }
 
 .result-card .score {
@@ -380,22 +454,24 @@ body {
 .is-mobile .mobile-only { display: inline-flex; }
 .is-mobile .desktop-only { display: none !important; }
 
-/* Mobile: score-here button */
+/* Mobile: score-here button — Fitts's Law: min 48px touch target */
 #score-here-btn {
-  padding: 10px 20px;
+  padding: 14px 24px;
+  min-height: 48px;
   background: #3b82f6;
   color: #fff;
   border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  border-radius: 10px;
+  font-size: 1rem;
   font-weight: bold;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.1s;
   white-space: nowrap;
 }
 
 #score-here-btn:hover { background: #2563eb; }
-#score-here-btn:disabled { background: #555; cursor: not-allowed; }
+#score-here-btn:active { transform: scale(0.97); }
+#score-here-btn:disabled { background: #555; cursor: not-allowed; transform: none; }
 
 /* --- Mobile score card --- */
 #mobile-score-card {
@@ -411,6 +487,12 @@ body {
   padding: 20px 20px 24px;
   max-height: 55vh;
   overflow-y: auto;
+  animation: slide-up 0.35s ease-out;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .score-card-main {

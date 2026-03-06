@@ -138,6 +138,29 @@ async function runDesktopAnalysis(): Promise<void> {
   resultsEl.classList.add('hidden');
   clearResults();
 
+  // Goal Gradient: simulate progress steps
+  const steps = document.querySelectorAll('#loading-steps .loading-step');
+  const setStep = (index: number) => {
+    steps.forEach((el, i) => {
+      const icon = el.querySelector('.step-icon')!;
+      if (i < index) {
+        el.classList.remove('active');
+        el.classList.add('done');
+        icon.textContent = '✓';
+      } else if (i === index) {
+        el.classList.add('active');
+        el.classList.remove('done');
+        icon.textContent = '◉';
+      } else {
+        el.classList.remove('active', 'done');
+        icon.textContent = '○';
+      }
+    });
+  };
+  setStep(0);
+  const stepTimer1 = setTimeout(() => setStep(1), 1500);
+  const stepTimer2 = setTimeout(() => setStep(2), 4000);
+
   try {
     const response = await analyzePosition({
       launchSite: { lat, lng },
@@ -146,6 +169,9 @@ async function runDesktopAnalysis(): Promise<void> {
       fireworkDiameter: currentFireworkDiameter,
     });
 
+    // Mark all steps done
+    setStep(3);
+
     renderResults(response);
     showDesktopResults(response);
   } catch (err) {
@@ -153,10 +179,19 @@ async function runDesktopAnalysis(): Promise<void> {
     const message = err instanceof Error ? err.message : '不明なエラー';
     alert(`分析に失敗しました: ${message}`);
   } finally {
+    clearTimeout(stepTimer1);
+    clearTimeout(stepTimer2);
     isAnalyzing = false;
     analyzeBtn.disabled = false;
     loadingEl.classList.add('hidden');
   }
+}
+
+function scoreQualityLabel(percent: number): { text: string; cls: string } {
+  if (percent >= 70) return { text: '最適', cls: 'excellent' };
+  if (percent >= 50) return { text: '良好', cls: 'good' };
+  if (percent >= 30) return { text: 'まあまあ', cls: 'fair' };
+  return { text: '不向き', cls: 'poor' };
 }
 
 function showDesktopResults(response: AnalyzeResponse): void {
@@ -169,13 +204,16 @@ function showDesktopResults(response: AnalyzeResponse): void {
 
   response.topPositions.slice(0, 10).forEach((p, i) => {
     const card = document.createElement('div');
-    card.className = 'result-card';
+    card.className = i === 0 ? 'result-card rank-1' : 'result-card';
+    card.style.animationDelay = `${i * 0.05}s`;
     card.addEventListener('click', () => focusOnPosition(i));
 
-    const scorePercent = (p.score.total * 100).toFixed(0);
+    const scorePercent = Number((p.score.total * 100).toFixed(0));
+    const quality = scoreQualityLabel(scorePercent);
     card.innerHTML = `
       <span class="rank">${i + 1}</span>
       <span class="score">${scorePercent}点</span>
+      <span class="score-quality ${quality.cls}">${quality.text}</span>
       <div class="details">
         距離: ${p.distanceMeters}m / 仰角: ${p.viewingAngleDeg}° / 標高差: ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m
       </div>
@@ -231,7 +269,8 @@ async function runMobileScore(): Promise<void> {
   const lng = parseFloat(lngInput.value);
 
   if (isNaN(lat) || isNaN(lng)) {
-    alert('まず花火大会を選択してください');
+    editorHint.classList.remove('hidden');
+    editorHintText.textContent = 'まず花火大会を選んでください ↑';
     return;
   }
 
@@ -298,14 +337,18 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   const v = response.viewer;
   const totalPercent = Math.round(v.score.total * 100);
 
-  // Score value + color
+  // Score value + color + quality label
   const scoreValueEl = document.getElementById('score-value')!;
   scoreValueEl.textContent = String(totalPercent);
   const mainEl = mobileScoreCard.querySelector('.score-card-main') as HTMLElement;
+  const quality = scoreQualityLabel(totalPercent);
   if (totalPercent >= 70) mainEl.style.borderLeftColor = '#22c55e';
   else if (totalPercent >= 50) mainEl.style.borderLeftColor = '#eab308';
   else if (totalPercent >= 30) mainEl.style.borderLeftColor = '#f97316';
   else mainEl.style.borderLeftColor = '#ef4444';
+
+  const scoreLabelEl = mobileScoreCard.querySelector('.score-label') as HTMLElement;
+  scoreLabelEl.textContent = `ここからの見やすさ — ${quality.text}`;
 
   // Details
   document.getElementById('sc-distance')!.textContent = `${v.distanceMeters}m`;
