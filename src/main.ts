@@ -386,94 +386,40 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   mobileScoreCard.classList.remove('hidden');
   mobileScoreCard.classList.remove('minimized');
   mobileScoreCard.style.transform = '';
-  bottomSheetFullHeight = mobileScoreCard.offsetHeight;
-  bottomSheetMinY = bottomSheetFullHeight - BOTTOM_SHEET_PEEK;
+  bsMinimized = false;
 }
 
 // ============================================================
-// Bottom sheet swipe logic
+// Bottom sheet minimize / expand
 // ============================================================
 
 const BOTTOM_SHEET_PEEK = 72; // minimized時に見える高さ (px)
-let bottomSheetFullHeight = 0;
-let bottomSheetMinY = 0;
-let bsDragStartY = 0;
-let bsDragCurrentY = 0;
-let bsDragging = false;
 let bsMinimized = false;
 
+function minimizeScoreCard(): void {
+  if (!mobileScoreCard || mobileScoreCard.classList.contains('hidden')) return;
+  const fullHeight = mobileScoreCard.scrollHeight;
+  const minY = fullHeight - BOTTOM_SHEET_PEEK;
+  bsMinimized = true;
+  mobileScoreCard.classList.add('minimized');
+  mobileScoreCard.style.transform = `translateY(${minY}px)`;
+}
+
+function expandScoreCard(): void {
+  if (!mobileScoreCard) return;
+  bsMinimized = false;
+  mobileScoreCard.classList.remove('minimized');
+  mobileScoreCard.style.transform = '';
+}
+
 if (isMobile && mobileScoreCard) {
-  const handle = mobileScoreCard.querySelector('.bottom-sheet-handle') as HTMLElement;
+  // ×ボタンで最小化
+  const closeBtn = document.getElementById('score-card-close');
+  closeBtn?.addEventListener('click', minimizeScoreCard);
 
-  const onStart = (clientY: number) => {
-    bsDragging = true;
-    bsDragStartY = clientY;
-    bsDragCurrentY = clientY;
-    mobileScoreCard!.style.transition = 'none';
-  };
-
-  const onMove = (clientY: number) => {
-    if (!bsDragging) return;
-    bsDragCurrentY = clientY;
-    const dy = bsDragCurrentY - bsDragStartY;
-    const baseY = bsMinimized ? bottomSheetMinY : 0;
-    const newY = Math.max(0, baseY + dy);
-    mobileScoreCard!.style.transform = `translateY(${newY}px)`;
-  };
-
-  const onEnd = () => {
-    if (!bsDragging) return;
-    bsDragging = false;
-    mobileScoreCard!.style.transition = '';
-    const dy = bsDragCurrentY - bsDragStartY;
-
-    if (bsMinimized) {
-      // 上にスワイプ → 展開
-      if (dy < -40) {
-        bsMinimized = false;
-        mobileScoreCard!.classList.remove('minimized');
-        mobileScoreCard!.style.transform = '';
-      } else {
-        mobileScoreCard!.style.transform = `translateY(${bottomSheetMinY}px)`;
-      }
-    } else {
-      // 下にスワイプ → 最小化
-      if (dy > 40) {
-        bsMinimized = true;
-        mobileScoreCard!.classList.add('minimized');
-        mobileScoreCard!.style.transform = `translateY(${bottomSheetMinY}px)`;
-      } else {
-        mobileScoreCard!.style.transform = '';
-      }
-    }
-  };
-
-  handle.addEventListener('touchstart', (e) => {
-    onStart(e.touches[0].clientY);
-  }, { passive: true });
-
-  document.addEventListener('touchmove', (e) => {
-    if (bsDragging) onMove(e.touches[0].clientY);
-  }, { passive: true });
-
-  document.addEventListener('touchend', () => {
-    onEnd();
-  });
-
-  // ハンドルタップで切り替え
-  handle.addEventListener('click', () => {
-    if (!mobileScoreCard!.classList.contains('hidden')) {
-      bottomSheetFullHeight = mobileScoreCard!.scrollHeight;
-      bottomSheetMinY = bottomSheetFullHeight - BOTTOM_SHEET_PEEK;
-      bsMinimized = !bsMinimized;
-      if (bsMinimized) {
-        mobileScoreCard!.classList.add('minimized');
-        mobileScoreCard!.style.transform = `translateY(${bottomSheetMinY}px)`;
-      } else {
-        mobileScoreCard!.classList.remove('minimized');
-        mobileScoreCard!.style.transform = '';
-      }
-    }
+  // 最小化状態のカードタップで展開
+  mobileScoreCard.addEventListener('click', () => {
+    if (bsMinimized) expandScoreCard();
   });
 }
 
@@ -501,12 +447,18 @@ presetSelect.addEventListener('change', () => {
 initMap('map', (lat, lng) => {
   if (isAnalyzing) return;
   if (isMobile) {
-    // モバイル: 打上地点が設定済みなら地図タップでスコア計算
     const launchLat = parseFloat(latInput.value);
     const launchLng = parseFloat(lngInput.value);
-    if (!isNaN(launchLat) && !isNaN(launchLng)) {
-      scoreFromLocation(lat, lng);
+    if (isNaN(launchLat) || isNaN(launchLng)) return;
+
+    // スコアカードが展開中なら最小化だけして終了
+    if (mobileScoreCard && !mobileScoreCard.classList.contains('hidden') && !bsMinimized) {
+      minimizeScoreCard();
+      return;
     }
+
+    // 最小化中 or 非表示なら再計算
+    scoreFromLocation(lat, lng);
     return;
   }
   presetSelect.value = '';
