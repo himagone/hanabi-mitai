@@ -1,6 +1,8 @@
 import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse } from './types.js';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.DEV
+  ? '/api'
+  : 'https://fl267a9ued.execute-api.ap-northeast-1.amazonaws.com/api';
 
 export async function analyzePosition(
   request: AnalyzeRequest,
