@@ -360,10 +360,10 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   const scoreValueEl = document.getElementById('score-value')!;
   scoreValueEl.textContent = String(totalPercent);
   const mainEl = mobileScoreCard.querySelector('.score-card-main') as HTMLElement;
-  if (totalPercent >= 70) mainEl.style.borderLeftColor = '#22c55e';
-  else if (totalPercent >= 50) mainEl.style.borderLeftColor = '#eab308';
-  else if (totalPercent >= 30) mainEl.style.borderLeftColor = '#f97316';
-  else mainEl.style.borderLeftColor = '#ef4444';
+  if (totalPercent >= 70) mainEl.style.borderLeftColor = '#6ee7a0';
+  else if (totalPercent >= 50) mainEl.style.borderLeftColor = '#8bb3e4';
+  else if (totalPercent >= 30) mainEl.style.borderLeftColor = '#fbbf24';
+  else mainEl.style.borderLeftColor = '#f87171';
 
   // Details
   document.getElementById('sc-distance')!.textContent = distanceWithWalk(v.distanceMeters);

@@ -566,8 +566,9 @@ export function setLaunchMarker(lat: number, lng: number): void {
 
   const el = document.createElement('div');
   el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
-    <circle cx="16" cy="16" r="14" fill="#ff6b35" stroke="#fff" stroke-width="2"/>
-    <text x="16" y="21" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">*</text>
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8bb3e4"/><stop offset="100%" stop-color="#fae1f8"/></linearGradient></defs>
+    <circle cx="16" cy="16" r="14" fill="url(#lg)" stroke="#fff" stroke-width="2"/>
+    <text x="16" y="21" text-anchor="middle" fill="#070c23" font-size="16" font-weight="bold">*</text>
   </svg>`;
 
   launchMarker = new maplibregl.Marker({ element: el })
@@ -591,10 +592,10 @@ export function clearResults(): void {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 0.7) return '#22c55e';
-  if (score >= 0.5) return '#eab308';
-  if (score >= 0.3) return '#f97316';
-  return '#ef4444';
+  if (score >= 0.7) return '#6ee7a0';
+  if (score >= 0.5) return '#8bb3e4';
+  if (score >= 0.3) return '#fbbf24';
+  return '#f87171';
 }
 
 export function renderResults(response: AnalyzeResponse): void {
@@ -717,7 +718,7 @@ export function setViewerMarker(lat: number, lng: number, label?: string): void 
 
   const el = document.createElement('div');
   el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
-    <circle cx="16" cy="16" r="14" fill="#3b82f6" stroke="#fff" stroke-width="2"/>
+    <circle cx="16" cy="16" r="14" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
     <circle cx="16" cy="16" r="5" fill="#fff"/>
   </svg>`;
 
