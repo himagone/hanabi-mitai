@@ -41,21 +41,21 @@
       </div>
       <button id="analyze-btn" type="button">分析する</button>
       <div class="exclusion-controls">
-        <button id="draw-exclusion-btn" type="button" class="btn-secondary">立入禁止エリアを描画</button>
-        <button id="undo-exclusion-btn" type="button" class="btn-secondary btn-small hidden">1つ戻す</button>
-        <button id="clear-exclusion-btn" type="button" class="btn-secondary btn-small hidden">全て削除</button>
+        <button id="draw-rect-btn" type="button" class="btn-tool" title="ドラッグで立入禁止エリアを描画">
+          <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          立入禁止エリア
+        </button>
+        <button id="undo-exclusion-btn" type="button" class="btn-tool btn-small hidden">戻す</button>
+        <button id="clear-exclusion-btn" type="button" class="btn-tool btn-small hidden">全削除</button>
       </div>
       <p class="hint">または地図をクリックして打上地点を指定</p>
     </div>
 
     <div id="map-container">
-      <div id="drawing-banner" class="hidden">
-        <span id="drawing-status">地図をクリックして頂点を追加してください</span>
-        <button id="finish-drawing-btn" type="button" class="hidden">確定</button>
-        <button id="undo-vertex-btn" type="button" class="hidden">1点戻す</button>
-        <button id="cancel-drawing-btn" type="button">キャンセル</button>
-      </div>
       <div id="map"></div>
+      <div id="editor-hint" class="hidden">
+        <span id="editor-hint-text"></span>
+      </div>
       <div id="loading" class="hidden">
         <div class="spinner"></div>
         <p>地形データを分析中...</p>

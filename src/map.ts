@@ -2,30 +2,51 @@ import maplibregl from 'maplibre-gl';
 import type { AnalyzeResponse, ExclusionZone } from './types.js';
 
 const GEOLONIA_STYLE = `https://cdn.geolonia.com/style/geolonia/gsi/ja.json`;
+const MIN_DRAG_PX = 8;
 
+// --- Map references ---
 let map: maplibregl.Map | null = null;
 let launchMarker: maplibregl.Marker | null = null;
 const topMarkers: maplibregl.Marker[] = [];
 
-// --- 除外ゾーン描画 ---
-let drawingMode = false;
-let currentVertices: [number, number][] = []; // [lng, lat][]
+// --- Editor state ---
+type EditorState =
+  | { mode: 'idle' }
+  | { mode: 'drawing-rect'; start: [number, number] | null; current: [number, number] | null }
+  | { mode: 'selected'; zoneIndex: number; dragIndex: number | null };
+
+let state: EditorState = { mode: 'idle' };
 const exclusionZones: ExclusionZone[] = [];
-let onMapClickHandler: ((lat: number, lng: number) => void) | null = null;
-let onDrawingChangeHandler: (() => void) | null = null;
-let cursorLngLat: [number, number] | null = null;
 
-// 最初の頂点をクリックで閉じるための判定距離（ピクセル）
-const CLOSE_SNAP_PX = 12;
+let mapClickHandler: ((lat: number, lng: number) => void) | null = null;
+let stateChangeHandler: (() => void) | null = null;
+let preventNextClick = false;
 
-/**
- * 地図を初期化
- */
+// --- Geometry helpers ---
+
+function rectToPolygon(a: [number, number], b: [number, number]): [number, number][] {
+  return [
+    [a[0], a[1]],
+    [b[0], a[1]],
+    [b[0], b[1]],
+    [a[0], b[1]],
+  ];
+}
+
+function screenDist(a: [number, number], b: [number, number]): number {
+  if (!map) return 0;
+  const pa = map.project(a);
+  const pb = map.project(b);
+  return Math.sqrt((pa.x - pb.x) ** 2 + (pa.y - pb.y) ** 2);
+}
+
+// --- Initialization ---
+
 export function initMap(
   container: string | HTMLElement,
   onMapClick: (lat: number, lng: number) => void,
 ): maplibregl.Map {
-  onMapClickHandler = onMapClick;
+  mapClickHandler = onMapClick;
 
   map = new maplibregl.Map({
     container,
@@ -44,106 +65,243 @@ export function initMap(
     'top-left',
   );
 
-  map.on('click', handleMapClick);
+  map.on('load', initLayers);
+  map.on('click', handleClick);
+  map.on('mousedown', handleMouseDown);
+  map.on('mousemove', handleMouseMove);
+  map.on('mouseup', handleMouseUp);
 
-  map.on('dblclick', (e) => {
-    if (drawingMode) {
-      e.preventDefault();
-    }
+  // Vertex drag
+  map.on('mousedown', 'selected-vertices-layer', (e) => {
+    if (state.mode !== 'selected' || !e.features?.length) return;
+    e.preventDefault();
+    state.dragIndex = e.features[0].properties!.index as number;
+    map!.dragPan.disable();
+    map!.getCanvas().style.cursor = 'grabbing';
+    preventNextClick = true;
   });
 
-  map.on('mousemove', (e) => {
-    if (!drawingMode || currentVertices.length === 0) return;
-    cursorLngLat = [e.lngLat.lng, e.lngLat.lat];
-
-    // 最初の頂点に近いかチェック → カーソル変更
-    if (currentVertices.length >= 3 && isNearFirstVertex(e.point)) {
-      map!.getCanvas().style.cursor = 'pointer';
-    } else {
-      map!.getCanvas().style.cursor = 'crosshair';
-    }
-
-    updateDrawingPreview();
+  // Midpoint drag → insert vertex then drag
+  map.on('mousedown', 'selected-midpoints-layer', (e) => {
+    if (state.mode !== 'selected' || !e.features?.length) return;
+    e.preventDefault();
+    const edgeIdx = e.features[0].properties!.index as number;
+    exclusionZones[state.zoneIndex].splice(edgeIdx + 1, 0, [e.lngLat.lng, e.lngLat.lat]);
+    state.dragIndex = edgeIdx + 1;
+    map!.dragPan.disable();
+    map!.getCanvas().style.cursor = 'grabbing';
+    preventNextClick = true;
+    renderAll();
   });
 
-  map.on('load', () => {
-    initDrawingLayers();
+  // Cursor feedback
+  map.on('mouseenter', 'selected-vertices-layer', () => {
+    if (state.mode === 'selected' && state.dragIndex === null)
+      map!.getCanvas().style.cursor = 'grab';
   });
+  map.on('mouseleave', 'selected-vertices-layer', () => {
+    if (state.mode === 'selected' && state.dragIndex === null)
+      map!.getCanvas().style.cursor = '';
+  });
+  map.on('mouseenter', 'selected-midpoints-layer', () => {
+    if (state.mode === 'selected' && state.dragIndex === null)
+      map!.getCanvas().style.cursor = 'copy';
+  });
+  map.on('mouseleave', 'selected-midpoints-layer', () => {
+    if (state.mode === 'selected' && state.dragIndex === null)
+      map!.getCanvas().style.cursor = '';
+  });
+  map.on('mouseenter', 'exclusion-zones-fill', () => {
+    if (state.mode === 'idle') map!.getCanvas().style.cursor = 'pointer';
+  });
+  map.on('mouseleave', 'exclusion-zones-fill', () => {
+    if (state.mode === 'idle') map!.getCanvas().style.cursor = '';
+  });
+
+  // Keyboard
+  document.addEventListener('keydown', handleKeyDown);
+
+  // Handle mouseup outside map
+  document.addEventListener('mouseup', handleGlobalMouseUp);
 
   return map;
 }
 
-/**
- * 描画変更時のコールバックを登録
- */
-export function onDrawingChange(cb: () => void): void {
-  onDrawingChangeHandler = cb;
+export function onStateChange(cb: () => void): void {
+  stateChangeHandler = cb;
 }
+export const onDrawingChange = onStateChange;
 
-/**
- * マップクリックハンドラー
- */
-function handleMapClick(e: maplibregl.MapMouseEvent): void {
-  if (!drawingMode) {
-    onMapClickHandler?.(e.lngLat.lat, e.lngLat.lng);
+// --- Event handlers ---
+
+function handleClick(e: maplibregl.MapMouseEvent): void {
+  if (!map) return;
+  if (preventNextClick) { preventNextClick = false; return; }
+
+  // Rect mode is handled by mousedown/up, not click
+  if (state.mode === 'drawing-rect') return;
+
+  // Click on zone → select
+  const zoneFeatures = map.queryRenderedFeatures(e.point, {
+    layers: ['exclusion-zones-fill'],
+  });
+  if (zoneFeatures.length > 0) {
+    selectZone(zoneFeatures[0].properties!.index as number);
     return;
   }
 
-  // 3点以上打ったら最初の頂点付近クリックで確定
-  if (currentVertices.length >= 3 && isNearFirstVertex(e.point)) {
-    finishDrawing();
+  // Selected → deselect
+  if (state.mode === 'selected') {
+    deselectZone();
     return;
   }
 
-  currentVertices.push([e.lngLat.lng, e.lngLat.lat]);
-  cursorLngLat = null;
-  updateDrawingPreview();
-  onDrawingChangeHandler?.();
+  // Idle → launch point
+  mapClickHandler?.(e.lngLat.lat, e.lngLat.lng);
 }
 
-/**
- * クリック位置が最初の頂点に十分近いか判定
- */
-function isNearFirstVertex(screenPoint: maplibregl.Point): boolean {
-  if (!map || currentVertices.length === 0) return false;
-  const firstPx = map.project(currentVertices[0] as [number, number]);
-  const dx = screenPoint.x - firstPx.x;
-  const dy = screenPoint.y - firstPx.y;
-  return Math.sqrt(dx * dx + dy * dy) < CLOSE_SNAP_PX;
-}
-
-/**
- * 描画用レイヤーの初期化
- */
-function initDrawingLayers(): void {
+function handleMouseDown(e: maplibregl.MapMouseEvent): void {
   if (!map) return;
 
-  // 確定済み除外ゾーン
-  map.addSource('exclusion-zones', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-  });
+  // Start rect drag
+  if (state.mode === 'drawing-rect' && !state.start) {
+    state.start = [e.lngLat.lng, e.lngLat.lat];
+    state.current = [e.lngLat.lng, e.lngLat.lat];
+    preventNextClick = true;
+    return;
+  }
 
+}
+
+function handleMouseMove(e: maplibregl.MapMouseEvent): void {
+  if (!map) return;
+
+  // Vertex dragging
+  if (state.mode === 'selected' && state.dragIndex !== null) {
+    const zone = exclusionZones[state.zoneIndex];
+    if (zone && state.dragIndex < zone.length) {
+      zone[state.dragIndex] = [e.lngLat.lng, e.lngLat.lat];
+      renderAll();
+    }
+    return;
+  }
+
+  // Rect preview
+  if (state.mode === 'drawing-rect' && state.start) {
+    state.current = [e.lngLat.lng, e.lngLat.lat];
+    renderShapePreview();
+    return;
+  }
+
+}
+
+function handleMouseUp(e: maplibregl.MapMouseEvent): void {
+  if (!map) return;
+
+  // End vertex drag
+  if (state.mode === 'selected' && state.dragIndex !== null) {
+    state.dragIndex = null;
+    map.dragPan.enable();
+    map.getCanvas().style.cursor = '';
+    stateChangeHandler?.();
+    return;
+  }
+
+  // Finish rect
+  if (state.mode === 'drawing-rect' && state.start && state.current) {
+    if (screenDist(state.start, state.current) >= MIN_DRAG_PX) {
+      const zone = rectToPolygon(state.start, state.current);
+      commitZone(zone);
+    } else {
+      // Too small — reset for another attempt
+      state.start = null;
+      state.current = null;
+      clearDrawingLayers();
+    }
+    return;
+  }
+
+}
+
+function handleGlobalMouseUp(): void {
+  // Handle drag end outside canvas
+  if (state.mode === 'selected' && state.dragIndex !== null) {
+    state.dragIndex = null;
+    map?.dragPan.enable();
+    if (map) map.getCanvas().style.cursor = '';
+  }
+  // Handle rect end outside canvas
+  if (state.mode === 'drawing-rect' && state.start) {
+    state.start = null;
+    state.current = null;
+    clearDrawingLayers();
+  }
+}
+
+function handleKeyDown(e: KeyboardEvent): void {
+  const tag = (e.target as HTMLElement).tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  switch (e.key) {
+    case 'Escape':
+      if (state.mode === 'drawing-rect') cancelDrawing();
+      else if (state.mode === 'selected') deselectZone();
+      break;
+    case 'Delete':
+    case 'Backspace':
+      if (state.mode === 'selected') {
+        e.preventDefault();
+        deleteSelectedZone();
+      }
+      break;
+  }
+}
+
+// --- Commit a zone and select it ---
+
+function commitZone(zone: [number, number][]): void {
+  const newIndex = exclusionZones.length;
+  exclusionZones.push(zone);
+  state = { mode: 'selected', zoneIndex: newIndex, dragIndex: null };
+  if (map) {
+    map.getCanvas().style.cursor = '';
+    map.dragPan.enable();
+    map.doubleClickZoom.enable();
+  }
+  clearDrawingLayers();
+  renderAll();
+  stateChangeHandler?.();
+}
+
+// --- Layer initialization ---
+
+function initLayers(): void {
+  if (!map) return;
+
+  // Confirmed zones
+  map.addSource('exclusion-zones', { type: 'geojson', data: emptyFC() });
   map.addLayer({
     id: 'exclusion-zones-fill',
     type: 'fill',
     source: 'exclusion-zones',
-    paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.25 },
+    paint: {
+      'fill-color': ['case', ['==', ['get', 'selected'], true], '#f97316', '#ef4444'],
+      'fill-opacity': ['case', ['==', ['get', 'selected'], true], 0.25, 0.18],
+    },
   });
-
   map.addLayer({
     id: 'exclusion-zones-outline',
     type: 'line',
     source: 'exclusion-zones',
-    paint: { 'line-color': '#ef4444', 'line-width': 2, 'line-dasharray': [3, 2] },
+    paint: {
+      'line-color': ['case', ['==', ['get', 'selected'], true], '#f97316', '#ef4444'],
+      'line-width': ['case', ['==', ['get', 'selected'], true], 2.5, 1.5],
+      'line-dasharray': ['case', ['==', ['get', 'selected'], true], ['literal', [1, 0]], ['literal', [3, 2]]],
+    },
   });
 
-  // 描画中ポリゴン塗り（プレビュー）
-  map.addSource('drawing-polygon', {
-    type: 'geojson',
-    data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[]] }, properties: {} },
-  });
-
+  // Drawing preview polygon
+  map.addSource('drawing-polygon', { type: 'geojson', data: emptyPolygon() });
   map.addLayer({
     id: 'drawing-polygon-fill',
     type: 'fill',
@@ -151,207 +309,150 @@ function initDrawingLayers(): void {
     paint: { 'fill-color': '#f97316', 'fill-opacity': 0.15 },
   });
 
-  // 描画中のライン（確定辺）
-  map.addSource('drawing-line', {
-    type: 'geojson',
-    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} },
-  });
-
+  // Drawing lines
+  map.addSource('drawing-line', { type: 'geojson', data: emptyLine() });
   map.addLayer({
     id: 'drawing-line-layer',
     type: 'line',
     source: 'drawing-line',
-    paint: { 'line-color': '#f97316', 'line-width': 2.5 },
+    paint: { 'line-color': '#f97316', 'line-width': 2 },
   });
 
-  // カーソル追従ライン（点線）
-  map.addSource('drawing-cursor-line', {
-    type: 'geojson',
-    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} },
-  });
-
+  // Selected zone handles
+  map.addSource('selected-midpoints', { type: 'geojson', data: emptyFC() });
   map.addLayer({
-    id: 'drawing-cursor-line-layer',
-    type: 'line',
-    source: 'drawing-cursor-line',
-    paint: { 'line-color': '#f97316', 'line-width': 1.5, 'line-dasharray': [4, 3], 'line-opacity': 0.7 },
-  });
-
-  // 描画中の頂点
-  map.addSource('drawing-vertices', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-  });
-
-  // 始点マーカー（大きめ、閉じる操作用）
-  map.addLayer({
-    id: 'drawing-first-vertex',
+    id: 'selected-midpoints-layer',
     type: 'circle',
-    source: 'drawing-vertices',
-    filter: ['==', ['get', 'isFirst'], true],
+    source: 'selected-midpoints',
     paint: {
-      'circle-radius': 7,
+      'circle-radius': 4,
       'circle-color': '#fff',
       'circle-stroke-color': '#f97316',
-      'circle-stroke-width': 3,
+      'circle-stroke-width': 1.5,
+      'circle-opacity': 0.6,
+      'circle-stroke-opacity': 0.6,
     },
   });
 
-  // 通常の頂点
+  map.addSource('selected-vertices', { type: 'geojson', data: emptyFC() });
   map.addLayer({
-    id: 'drawing-vertices-layer',
+    id: 'selected-vertices-layer',
     type: 'circle',
-    source: 'drawing-vertices',
-    filter: ['==', ['get', 'isFirst'], false],
+    source: 'selected-vertices',
     paint: {
-      'circle-radius': 5,
-      'circle-color': '#f97316',
-      'circle-stroke-color': '#fff',
-      'circle-stroke-width': 2,
+      'circle-radius': 6,
+      'circle-color': '#fff',
+      'circle-stroke-color': '#f97316',
+      'circle-stroke-width': 2.5,
     },
   });
 }
 
-/**
- * 描画モードの開始
- */
-export function startDrawing(): void {
-  drawingMode = true;
-  currentVertices = [];
-  cursorLngLat = null;
+// --- Drawing mode starts ---
+
+export function startDrawingRect(): void {
+  exitCurrentMode();
+  state = { mode: 'drawing-rect', start: null, current: null };
   if (map) {
     map.getCanvas().style.cursor = 'crosshair';
     map.doubleClickZoom.disable();
+    map.dragPan.disable();
+  }
+  stateChangeHandler?.();
+}
+
+function exitCurrentMode(): void {
+  if (state.mode === 'selected') {
+    // Clean up selection handles
+    renderSelectedHandles(true);
+  }
+  clearDrawingLayers();
+  if (map) {
+    map.getCanvas().style.cursor = '';
+    map.dragPan.enable();
+    map.doubleClickZoom.enable();
   }
 }
 
-/**
- * 描画モードのキャンセル
- */
 export function cancelDrawing(): void {
-  drawingMode = false;
-  currentVertices = [];
-  cursorLngLat = null;
-  if (map) {
-    map.getCanvas().style.cursor = '';
-    map.doubleClickZoom.enable();
-  }
-  updateDrawingPreview();
-  onDrawingChangeHandler?.();
+  state = { mode: 'idle' };
+  exitCurrentMode();
+  stateChangeHandler?.();
 }
 
-/**
- * 最後の頂点を1つ取り消し
- */
-export function undoLastVertex(): void {
-  if (currentVertices.length > 0) {
-    currentVertices.pop();
-    updateDrawingPreview();
-    onDrawingChangeHandler?.();
-  }
+// --- Selection ---
+
+function selectZone(index: number): void {
+  state = { mode: 'selected', zoneIndex: index, dragIndex: null };
+  renderAll();
+  stateChangeHandler?.();
 }
 
-/**
- * 描画中のプレビューを更新
- */
-function updateDrawingPreview(): void {
+export function deselectZone(): void {
+  state = { mode: 'idle' };
+  if (map) map.getCanvas().style.cursor = '';
+  renderAll();
+  stateChangeHandler?.();
+}
+
+export function deleteSelectedZone(): void {
+  if (state.mode !== 'selected') return;
+  exclusionZones.splice(state.zoneIndex, 1);
+  state = { mode: 'idle' };
+  if (map) map.getCanvas().style.cursor = '';
+  renderAll();
+  stateChangeHandler?.();
+}
+
+// --- Zone management ---
+
+export function clearExclusionZones(): void {
+  exclusionZones.length = 0;
+  if (state.mode === 'selected') state = { mode: 'idle' };
+  renderAll();
+  stateChangeHandler?.();
+}
+
+export function undoLastExclusionZone(): void {
+  if (state.mode === 'selected' && state.zoneIndex === exclusionZones.length - 1) {
+    state = { mode: 'idle' };
+  }
+  exclusionZones.pop();
+  renderAll();
+  stateChangeHandler?.();
+}
+
+export function getExclusionZones(): ExclusionZone[] {
+  return [...exclusionZones];
+}
+
+// --- State queries ---
+
+export function isDrawing(): boolean {
+  return state.mode === 'drawing-rect';
+}
+
+export function getEditorMode(): string {
+  return state.mode;
+}
+
+export function getSelectedZoneIndex(): number | null {
+  return state.mode === 'selected' ? state.zoneIndex : null;
+}
+
+// --- Rendering ---
+
+function renderAll(): void {
+  renderZones();
+  renderSelectedHandles();
+}
+
+function renderZones(): void {
   if (!map) return;
+  const src = map.getSource('exclusion-zones') as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
 
-  const lineSource = map.getSource('drawing-line') as maplibregl.GeoJSONSource | undefined;
-  const cursorLineSource = map.getSource('drawing-cursor-line') as maplibregl.GeoJSONSource | undefined;
-  const vertexSource = map.getSource('drawing-vertices') as maplibregl.GeoJSONSource | undefined;
-  const polygonSource = map.getSource('drawing-polygon') as maplibregl.GeoJSONSource | undefined;
-
-  // 確定済みの辺（頂点間のライン）
-  if (lineSource) {
-    lineSource.setData({
-      type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: currentVertices.length >= 2 ? currentVertices : [],
-      },
-      properties: {},
-    });
-  }
-
-  // カーソル追従ライン: 最後の頂点→カーソル & カーソル→最初の頂点
-  if (cursorLineSource) {
-    const coords: [number, number][] = [];
-    if (currentVertices.length >= 1 && cursorLngLat) {
-      // 最後の頂点 → カーソル
-      coords.push(currentVertices[currentVertices.length - 1], cursorLngLat);
-      // カーソル → 最初の頂点（3点以上なら閉じるプレビュー）
-      if (currentVertices.length >= 2) {
-        coords.push(cursorLngLat, currentVertices[0]);
-      }
-    }
-    cursorLineSource.setData({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: coords },
-      properties: {},
-    });
-  }
-
-  // ポリゴン塗りプレビュー
-  if (polygonSource) {
-    let ring: [number, number][] = [];
-    if (currentVertices.length >= 2 && cursorLngLat) {
-      ring = [...currentVertices, cursorLngLat, currentVertices[0]];
-    } else if (currentVertices.length >= 3) {
-      ring = [...currentVertices, currentVertices[0]];
-    }
-    polygonSource.setData({
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: ring.length > 0 ? [ring] : [[]] },
-      properties: {},
-    });
-  }
-
-  // 頂点マーカー
-  if (vertexSource) {
-    vertexSource.setData({
-      type: 'FeatureCollection',
-      features: currentVertices.map((c, i) => ({
-        type: 'Feature' as const,
-        geometry: { type: 'Point' as const, coordinates: c },
-        properties: { isFirst: i === 0 && currentVertices.length >= 3 },
-      })),
-    });
-  }
-}
-
-/**
- * 描画を確定
- */
-export function finishDrawing(): void {
-  if (currentVertices.length < 3) {
-    cancelDrawing();
-    return;
-  }
-
-  exclusionZones.push([...currentVertices]);
-  drawingMode = false;
-  currentVertices = [];
-  cursorLngLat = null;
-  if (map) {
-    map.getCanvas().style.cursor = '';
-    map.doubleClickZoom.enable();
-  }
-  updateDrawingPreview();
-  renderExclusionZones();
-  onDrawingChangeHandler?.();
-}
-
-/**
- * 確定済み除外ゾーンを描画
- */
-function renderExclusionZones(): void {
-  if (!map) return;
-
-  const source = map.getSource('exclusion-zones') as maplibregl.GeoJSONSource | undefined;
-  if (!source) return;
-
-  source.setData({
+  src.setData({
     type: 'FeatureCollection',
     features: exclusionZones.map((zone, i) => ({
       type: 'Feature' as const,
@@ -359,56 +460,108 @@ function renderExclusionZones(): void {
         type: 'Polygon' as const,
         coordinates: [[...zone, zone[0]]],
       },
-      properties: { index: i },
+      properties: {
+        index: i,
+        selected: state.mode === 'selected' && state.zoneIndex === i,
+      },
     })),
   });
 }
 
-/**
- * 全除外ゾーンをクリア
- */
-export function clearExclusionZones(): void {
-  exclusionZones.length = 0;
-  renderExclusionZones();
+function renderSelectedHandles(clear = false): void {
+  if (!map) return;
+  const vertSrc = map.getSource('selected-vertices') as maplibregl.GeoJSONSource | undefined;
+  const midSrc = map.getSource('selected-midpoints') as maplibregl.GeoJSONSource | undefined;
+  if (!vertSrc || !midSrc) return;
+
+  if (clear || state.mode !== 'selected' || !exclusionZones[state.zoneIndex]) {
+    vertSrc.setData(emptyFC());
+    midSrc.setData(emptyFC());
+    return;
+  }
+
+  const zone = exclusionZones[state.zoneIndex];
+
+  vertSrc.setData({
+    type: 'FeatureCollection',
+    features: zone.map((coord, i) => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: coord },
+      properties: { index: i },
+    })),
+  });
+
+  midSrc.setData({
+    type: 'FeatureCollection',
+    features: zone.map((coord, i) => {
+      const next = zone[(i + 1) % zone.length];
+      return {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [(coord[0] + next[0]) / 2, (coord[1] + next[1]) / 2],
+        },
+        properties: { index: i },
+      };
+    }),
+  });
 }
 
-/**
- * 最後に追加した除外ゾーンを取り消し
- */
-export function undoLastExclusionZone(): void {
-  exclusionZones.pop();
-  renderExclusionZones();
+/** Rect / Circle drag preview */
+function renderShapePreview(): void {
+  if (!map) return;
+
+  let ring: [number, number][] = [];
+
+  if (state.mode === 'drawing-rect' && state.start && state.current) {
+    const verts = rectToPolygon(state.start, state.current);
+    ring = [...verts, verts[0]];
+  }
+
+  const polySrc = map.getSource('drawing-polygon') as maplibregl.GeoJSONSource | undefined;
+  if (polySrc) {
+    polySrc.setData({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: ring.length > 0 ? [ring] : [[]] },
+      properties: {},
+    });
+  }
+
+  const lineSrc = map.getSource('drawing-line') as maplibregl.GeoJSONSource | undefined;
+  if (lineSrc) {
+    lineSrc.setData({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: ring },
+      properties: {},
+    });
+  }
 }
 
-/**
- * 現在の除外ゾーンを取得
- */
-export function getExclusionZones(): ExclusionZone[] {
-  return [...exclusionZones];
+function clearDrawingLayers(): void {
+  if (!map) return;
+  (map.getSource('drawing-line') as maplibregl.GeoJSONSource | undefined)?.setData(emptyLine());
+  (map.getSource('drawing-polygon') as maplibregl.GeoJSONSource | undefined)?.setData(emptyPolygon());
 }
 
-/**
- * 描画中かどうか
- */
-export function isDrawing(): boolean {
-  return drawingMode;
+// --- GeoJSON helpers ---
+
+function emptyLine() {
+  return { type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [] as number[][] }, properties: {} };
+}
+function emptyPolygon() {
+  return { type: 'Feature' as const, geometry: { type: 'Polygon' as const, coordinates: [[]] as number[][][] }, properties: {} };
+}
+function emptyFC() {
+  return { type: 'FeatureCollection' as const, features: [] as GeoJSON.Feature[] };
 }
 
-/**
- * 描画中の頂点数
- */
-export function getVertexCount(): number {
-  return currentVertices.length;
-}
-
-// --- 打上地点・結果表示（変更なし） ---
+// ============================================================
+// Launch marker, results rendering
+// ============================================================
 
 export function setLaunchMarker(lat: number, lng: number): void {
   if (!map) return;
-
-  if (launchMarker) {
-    launchMarker.remove();
-  }
+  if (launchMarker) launchMarker.remove();
 
   const el = document.createElement('div');
   el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
@@ -429,14 +582,10 @@ export function setLaunchMarker(lat: number, lng: number): void {
 
 export function clearResults(): void {
   if (!map) return;
-
   if (map.getLayer('heatmap-layer')) map.removeLayer('heatmap-layer');
   if (map.getLayer('score-circles')) map.removeLayer('score-circles');
   if (map.getSource('scored-points')) map.removeSource('scored-points');
-
-  for (const m of topMarkers) {
-    m.remove();
-  }
+  for (const m of topMarkers) m.remove();
   topMarkers.length = 0;
 }
 
@@ -449,14 +598,11 @@ function scoreColor(score: number): string {
 
 export function renderResults(response: AnalyzeResponse): void {
   if (!map) return;
-
   clearResults();
-
-  const geojson = response.geojson;
 
   map.addSource('scored-points', {
     type: 'geojson',
-    data: geojson as unknown as maplibregl.GeoJSONSourceSpecification['data'],
+    data: response.geojson as unknown as maplibregl.GeoJSONSourceSpecification['data'],
   });
 
   map.addLayer({
@@ -502,7 +648,6 @@ export function renderResults(response: AnalyzeResponse): void {
     const f = e.features[0];
     const coords = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
     const p = f.properties!;
-
     new maplibregl.Popup({ offset: 10 })
       .setLngLat(coords)
       .setHTML(
@@ -518,17 +663,16 @@ export function renderResults(response: AnalyzeResponse): void {
   });
 
   map.on('mouseenter', 'score-circles', () => {
-    if (map && !drawingMode) map.getCanvas().style.cursor = 'pointer';
+    if (map && state.mode === 'idle') map.getCanvas().style.cursor = 'pointer';
   });
   map.on('mouseleave', 'score-circles', () => {
-    if (map && !drawingMode) map.getCanvas().style.cursor = '';
+    if (map && state.mode === 'idle') map.getCanvas().style.cursor = '';
   });
 
   const top = response.topPositions.slice(0, 10);
   for (let i = 0; i < top.length; i++) {
     const p = top[i];
     const color = scoreColor(p.score.total);
-
     const el = document.createElement('div');
     el.innerHTML = `<svg width="28" height="28" viewBox="0 0 28 28">
       <circle cx="14" cy="14" r="12" fill="${color}" stroke="#fff" stroke-width="2"/>
@@ -550,15 +694,12 @@ export function renderResults(response: AnalyzeResponse): void {
       .setLngLat([p.lng, p.lat])
       .setPopup(popup)
       .addTo(map);
-
     topMarkers.push(marker);
   }
 
   const bounds = new maplibregl.LngLatBounds();
   bounds.extend([response.launchSite.lng, response.launchSite.lat]);
-  for (const p of top) {
-    bounds.extend([p.lng, p.lat]);
-  }
+  for (const p of top) bounds.extend([p.lng, p.lat]);
   map.fitBounds(bounds, { padding: 60, maxZoom: 15 });
 }
 

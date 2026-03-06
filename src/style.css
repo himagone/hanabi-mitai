@@ -104,76 +104,73 @@ body {
   cursor: not-allowed;
 }
 
-/* Exclusion zone buttons */
+/* Exclusion zone tools */
 .exclusion-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
-.btn-secondary {
-  padding: 6px 14px;
-  background: transparent;
-  color: #ef4444;
-  border: 1px solid #ef4444;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  white-space: nowrap;
-}
-
-.btn-secondary:hover {
-  background: #ef4444;
-  color: #fff;
-}
-
-.btn-secondary.active {
-  background: #ef4444;
-  color: #fff;
-}
-
-.btn-small {
-  padding: 4px 10px;
-  font-size: 0.75rem;
-}
-
-/* Drawing banner */
-#drawing-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  background: rgba(239, 68, 68, 0.9);
-  color: #fff;
-  text-align: center;
-  padding: 8px 16px;
-  font-size: 0.85rem;
-  display: flex;
+.btn-tool {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-#drawing-banner button {
-  padding: 4px 12px;
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 4px;
-  font-size: 0.8rem;
+  gap: 4px;
+  padding: 6px 10px;
+  background: transparent;
+  color: #ccc;
+  border: 1px solid #3a3a5a;
+  border-radius: 6px;
+  font-size: 0.78rem;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
 }
 
-#drawing-banner button:hover {
-  background: rgba(255, 255, 255, 0.35);
+.btn-tool:hover {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: #f97316;
+  color: #f97316;
 }
 
-#finish-drawing-btn {
-  background: rgba(255, 255, 255, 0.4);
-  font-weight: bold;
+.btn-tool.active {
+  background: #f97316;
+  border-color: #f97316;
+  color: #fff;
+}
+
+.btn-tool svg {
+  flex-shrink: 0;
+}
+
+.btn-tool.btn-small {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.btn-tool.btn-small:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+}
+
+/* Editor hint bar */
+#editor-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  background: rgba(15, 15, 26, 0.85);
+  backdrop-filter: blur(8px);
+  color: #ccc;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .hint {

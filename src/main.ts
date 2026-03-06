@@ -5,21 +5,19 @@ import {
   renderResults,
   clearResults,
   focusOnPosition,
-  startDrawing,
+  startDrawingRect,
   cancelDrawing,
-  finishDrawing,
-  undoLastVertex,
   clearExclusionZones,
   undoLastExclusionZone,
   getExclusionZones,
-  getVertexCount,
+  getEditorMode,
   isDrawing,
-  onDrawingChange,
+  onStateChange,
 } from './map.js';
 import { analyzePosition } from './api.js';
 import type { AnalyzeResponse } from './types.js';
 
-// DOM 要素
+// DOM
 const presetSelect = document.getElementById('preset') as HTMLSelectElement;
 const latInput = document.getElementById('lat') as HTMLInputElement;
 const lngInput = document.getElementById('lng') as HTMLInputElement;
@@ -29,14 +27,11 @@ const loadingEl = document.getElementById('loading') as HTMLElement;
 const resultsEl = document.getElementById('results') as HTMLElement;
 const resultsListEl = document.getElementById('results-list') as HTMLElement;
 
-const drawExclusionBtn = document.getElementById('draw-exclusion-btn') as HTMLButtonElement;
+const drawRectBtn = document.getElementById('draw-rect-btn') as HTMLButtonElement;
 const undoExclusionBtn = document.getElementById('undo-exclusion-btn') as HTMLButtonElement;
 const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTMLButtonElement;
-const drawingBanner = document.getElementById('drawing-banner') as HTMLElement;
-const drawingStatus = document.getElementById('drawing-status') as HTMLElement;
-const finishDrawingBtn = document.getElementById('finish-drawing-btn') as HTMLButtonElement;
-const undoVertexBtn = document.getElementById('undo-vertex-btn') as HTMLButtonElement;
-const cancelDrawingBtn = document.getElementById('cancel-drawing-btn') as HTMLButtonElement;
+const editorHint = document.getElementById('editor-hint') as HTMLElement;
+const editorHintText = document.getElementById('editor-hint-text') as HTMLElement;
 
 let isAnalyzing = false;
 
@@ -46,55 +41,33 @@ function setLaunchSite(lat: number, lng: number): void {
   setLaunchMarker(lat, lng);
 }
 
-function updateExclusionButtons(): void {
+function updateUI(): void {
+  const mode = getEditorMode();
   const zones = getExclusionZones();
-  if (zones.length > 0) {
-    undoExclusionBtn.classList.remove('hidden');
-    clearExclusionBtn.classList.remove('hidden');
-  } else {
-    undoExclusionBtn.classList.add('hidden');
-    clearExclusionBtn.classList.add('hidden');
+  const drawing = isDrawing();
+
+  undoExclusionBtn.classList.toggle('hidden', zones.length === 0 || drawing);
+  clearExclusionBtn.classList.toggle('hidden', zones.length === 0 || drawing);
+
+  drawRectBtn.classList.toggle('active', mode === 'drawing-rect');
+
+  switch (mode) {
+    case 'drawing-rect':
+      editorHint.classList.remove('hidden');
+      editorHintText.textContent = 'ドラッグで矩形を描画 \u00B7 Esc キャンセル';
+      break;
+    case 'selected':
+      editorHint.classList.remove('hidden');
+      editorHintText.textContent = 'ドラッグで頂点移動 \u00B7 辺の中点ドラッグで追加 \u00B7 Delete 削除 \u00B7 Esc 選択解除';
+      break;
+    default:
+      editorHint.classList.add('hidden');
   }
 }
 
-/**
- * 描画中のバナー表示を更新
- */
-function updateDrawingBanner(): void {
-  if (!isDrawing()) {
-    drawingBanner.classList.add('hidden');
-    drawExclusionBtn.classList.remove('active');
-    updateExclusionButtons();
-    return;
-  }
+onStateChange(updateUI);
 
-  drawingBanner.classList.remove('hidden');
-  drawExclusionBtn.classList.add('active');
-
-  const count = getVertexCount();
-  if (count === 0) {
-    drawingStatus.textContent = '地図をクリックして頂点を追加してください';
-    finishDrawingBtn.classList.add('hidden');
-    undoVertexBtn.classList.add('hidden');
-  } else if (count === 1) {
-    drawingStatus.textContent = `${count}点 — 続けてクリックしてください`;
-    finishDrawingBtn.classList.add('hidden');
-    undoVertexBtn.classList.remove('hidden');
-  } else if (count === 2) {
-    drawingStatus.textContent = `${count}点 — あと1点以上追加してください`;
-    finishDrawingBtn.classList.add('hidden');
-    undoVertexBtn.classList.remove('hidden');
-  } else {
-    drawingStatus.textContent = `${count}点 — 始点クリックまたは「確定」で完了`;
-    finishDrawingBtn.classList.remove('hidden');
-    undoVertexBtn.classList.remove('hidden');
-  }
-}
-
-// 描画状態が変化したとき
-onDrawingChange(updateDrawingBanner);
-
-// プリセット選択
+// Preset
 presetSelect.addEventListener('change', () => {
   const value = presetSelect.value;
   if (!value) return;
@@ -102,44 +75,26 @@ presetSelect.addEventListener('change', () => {
   setLaunchSite(lat, lng);
 });
 
-// --- 除外ゾーン描画ボタン ---
-drawExclusionBtn.addEventListener('click', () => {
-  if (isDrawing()) {
+// Draw button toggle
+drawRectBtn.addEventListener('click', () => {
+  if (getEditorMode() === 'drawing-rect') {
     cancelDrawing();
   } else {
-    startDrawing();
+    startDrawingRect();
   }
-  updateDrawingBanner();
-});
-
-finishDrawingBtn.addEventListener('click', () => {
-  finishDrawing();
-  updateDrawingBanner();
-});
-
-undoVertexBtn.addEventListener('click', () => {
-  undoLastVertex();
-  updateDrawingBanner();
-});
-
-cancelDrawingBtn.addEventListener('click', () => {
-  cancelDrawing();
-  updateDrawingBanner();
 });
 
 undoExclusionBtn.addEventListener('click', () => {
   undoLastExclusionZone();
-  updateExclusionButtons();
+  updateUI();
 });
 
 clearExclusionBtn.addEventListener('click', () => {
   clearExclusionZones();
-  updateExclusionButtons();
+  updateUI();
 });
 
-/**
- * 分析を実行
- */
+// Analysis
 async function runAnalysis(): Promise<void> {
   const lat = parseFloat(latInput.value);
   const lng = parseFloat(lngInput.value);
@@ -219,7 +174,7 @@ function showResultsPanel(response: AnalyzeResponse): void {
   resultsEl.classList.remove('hidden');
 }
 
-// 地図を初期化
+// Init map
 initMap('map', (lat, lng) => {
   if (isAnalyzing) return;
   presetSelect.value = '';
