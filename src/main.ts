@@ -357,37 +357,70 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   const v = response.viewer;
   const totalPercent = Math.round(v.score.total * 100);
 
-  const scoreValueEl = document.getElementById('score-value')!;
-  scoreValueEl.textContent = String(totalPercent);
+  // Score + color
+  document.getElementById('score-value')!.textContent = String(totalPercent);
   const mainEl = mobileScoreCard.querySelector('.score-card-main') as HTMLElement;
-  if (totalPercent >= 70) mainEl.style.borderLeftColor = '#6ee7a0';
-  else if (totalPercent >= 50) mainEl.style.borderLeftColor = '#8bb3e4';
-  else if (totalPercent >= 30) mainEl.style.borderLeftColor = '#fbbf24';
-  else mainEl.style.borderLeftColor = '#f87171';
+  const badge = document.getElementById('score-badge')!;
 
-  // Details
+  if (totalPercent >= 70) {
+    mainEl.style.borderLeftColor = '#6ee7a0';
+    badge.textContent = 'よく見える';
+    badge.className = 'score-badge excellent';
+  } else if (totalPercent >= 50) {
+    mainEl.style.borderLeftColor = '#8bb3e4';
+    badge.textContent = 'まあまあ';
+    badge.className = 'score-badge good';
+  } else if (totalPercent >= 30) {
+    mainEl.style.borderLeftColor = '#fbbf24';
+    badge.textContent = '微妙';
+    badge.className = 'score-badge fair';
+  } else {
+    mainEl.style.borderLeftColor = '#f87171';
+    badge.textContent = '厳しい';
+    badge.className = 'score-badge poor';
+  }
+
+  // Reason (prominent, right below score)
+  document.getElementById('sc-reason')!.textContent = v.reason;
+
+  // Details: human-friendly labels + values
   document.getElementById('sc-distance')!.textContent = distanceWithWalk(v.distanceMeters);
   document.getElementById('sc-angle')!.textContent = `${v.viewingAngleDeg}°`;
-  document.getElementById('sc-elevation')!.textContent =
-    `${v.relativeElevation > 0 ? '+' : ''}${v.relativeElevation}m`;
+
   const losPercent = Math.round(v.score.lineOfSight * 100);
   document.getElementById('sc-los')!.textContent =
-    losPercent >= 90 ? 'なし' : losPercent >= 50 ? '少しあり' : 'あり';
+    losPercent >= 90 ? '遮るものなし' : losPercent >= 50 ? '少し遮りあり' : '建物が遮る';
+
+  const accessScore = v.score.accessibility;
+  document.getElementById('sc-access-label')!.textContent =
+    accessScore >= 0.9 ? '公園・広場' : accessScore <= 0.3 ? '住宅地' : '一般';
+
+  const relElev = v.relativeElevation;
+  document.getElementById('sc-elevation')!.textContent =
+    relElev > 10 ? `高台 +${relElev}m` : relElev > 3 ? `やや高い +${relElev}m` :
+    relElev < -5 ? `低地 ${relElev}m` : `${relElev > 0 ? '+' : ''}${relElev}m`;
 
   // Bars
   (document.getElementById('bar-angle') as HTMLElement).style.width = `${v.score.viewingAngle * 100}%`;
   (document.getElementById('bar-los') as HTMLElement).style.width = `${v.score.lineOfSight * 100}%`;
-  (document.getElementById('bar-access') as HTMLElement).style.width = `${v.score.accessibility * 100}%`;
+  (document.getElementById('bar-access') as HTMLElement).style.width = `${accessScore * 100}%`;
   (document.getElementById('bar-slope') as HTMLElement).style.width = `${v.score.slope * 100}%`;
-
-  // Reason
-  document.getElementById('sc-reason')!.textContent = v.reason;
 
   mobileScoreCard.classList.remove('hidden');
   mobileScoreCard.classList.remove('minimized');
   mobileScoreCard.style.transform = '';
   bsMinimized = false;
+  // カード表示中はフローティングボタンを隠す
   if (scoreHereBtn) scoreHereBtn.classList.add('hidden');
+}
+
+/** カードを閉じてフローティングボタンを復帰 */
+function closeScoreCard(): void {
+  if (!mobileScoreCard) return;
+  mobileScoreCard.classList.add('hidden');
+  mobileScoreCard.style.transform = '';
+  bsMinimized = false;
+  if (scoreHereBtn) scoreHereBtn.classList.remove('hidden');
 }
 
 // ============================================================
@@ -404,7 +437,6 @@ function minimizeScoreCard(): void {
   bsMinimized = true;
   mobileScoreCard.classList.add('minimized');
   mobileScoreCard.style.transform = `translateY(${minY}px)`;
-  if (scoreHereBtn) scoreHereBtn.classList.remove('hidden');
 }
 
 function expandScoreCard(): void {
@@ -412,20 +444,28 @@ function expandScoreCard(): void {
   bsMinimized = false;
   mobileScoreCard.classList.remove('minimized');
   mobileScoreCard.style.transform = '';
-  if (scoreHereBtn) scoreHereBtn.classList.add('hidden');
 }
 
 if (isMobile && mobileScoreCard) {
-  // ×ボタンで最小化（バブリングを停止して親の展開ハンドラを発火させない）
+  // ×ボタンでカードを閉じる
   const closeBtn = document.getElementById('score-card-close');
   closeBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    minimizeScoreCard();
+    closeScoreCard();
   });
 
   // 最小化状態のカードタップで展開
   mobileScoreCard.addEventListener('click', () => {
     if (bsMinimized) expandScoreCard();
+  });
+
+  // 「別の場所で調べる」ボタン → カードを閉じて地図タップモードへ
+  const retryBtn = document.getElementById('score-retry-btn');
+  retryBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeScoreCard();
+    editorHint.classList.remove('hidden');
+    editorHintText.textContent = '地図タップで見え方を確認';
   });
 }
 
@@ -457,13 +497,7 @@ initMap('map', (lat, lng) => {
     const launchLng = parseFloat(lngInput.value);
     if (isNaN(launchLat) || isNaN(launchLng)) return;
 
-    // スコアカードが展開中なら最小化だけして終了
-    if (mobileScoreCard && !mobileScoreCard.classList.contains('hidden') && !bsMinimized) {
-      minimizeScoreCard();
-      return;
-    }
-
-    // 最小化中 or 非表示なら再計算
+    // 地図タップで再計算
     scoreFromLocation(lat, lng);
     return;
   }
