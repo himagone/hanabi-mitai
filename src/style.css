@@ -35,14 +35,24 @@ body {
   font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
+  min-height: 100dvh;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+}
+
+@supports (min-height: 100dvh) {
+  body { min-height: 100dvh; }
 }
 
 #app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
+  height: 100vh; /* fallback for older browsers */
+}
+
+@supports (height: 100dvh) {
+  #app { height: 100dvh; }
 }
 
 /* ===== Header ===== */
@@ -206,7 +216,7 @@ body {
 /* Editor hint */
 #editor-hint {
   position: absolute;
-  bottom: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 8;
@@ -525,7 +535,7 @@ body {
 /* Mobile: score button — fixed to bottom of map */
 #score-here-btn {
   position: absolute;
-  bottom: 36px;
+  bottom: calc(36px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 8;
@@ -565,12 +575,17 @@ body {
   backdrop-filter: blur(24px);
   border-top: 1px solid var(--border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 8px 20px 28px;
+  padding: 8px 20px calc(28px + env(safe-area-inset-bottom, 0px));
+  max-height: 60dvh;
   max-height: 60vh;
   overflow-y: auto;
   transform: translateY(0);
   transition: transform 0.3s ease-out;
   will-change: transform;
+}
+
+@supports (max-height: 60dvh) {
+  #mobile-score-card { max-height: 60dvh; }
 }
 
 #mobile-score-card.minimized {
@@ -701,7 +716,7 @@ body {
   }
 
   #editor-hint {
-    bottom: 92px;
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   }
 
   .input-group input,
