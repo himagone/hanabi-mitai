@@ -55,7 +55,35 @@ function latLngToPixel(
 }
 
 /**
+ * テキストデータをパースしてグリッドに変換
+ */
+function parseTextTile(text: string): (number | null)[][] {
+  const rows = text.trim().split('\n');
+  const grid: (number | null)[][] = [];
+  for (const row of rows) {
+    const cells = row.split(',').map((v) => {
+      const trimmed = v.trim();
+      if (trimmed === 'e' || trimmed === '') return null;
+      const num = parseFloat(trimmed);
+      return isNaN(num) ? null : num;
+    });
+    grid.push(cells);
+  }
+  return grid;
+}
+
+/** 成功レスポンスからテキストを取得するヘルパー */
+async function fetchTileText(url: string, signal: AbortSignal): Promise<string> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.text();
+}
+
+/**
  * テキストタイルをフェッチしてパース
+ *
+ * DEM5A と DEM10B を並列に取得し、最初に成功したほうを使う。
+ * 8秒でタイムアウトして空グリッドを返す。
  */
 async function fetchTextTile(
   coord: TileCoord,
@@ -64,36 +92,22 @@ async function fetchTextTile(
   const cached = tileCache.get(key);
   if (cached) return cached;
 
-  // DEM5A を試し、なければ DEM10B にフォールバック
-  const urls = [
-    `https://cyberjapandata.gsi.go.jp/xyz/dem5a/${key}.txt`,
-    `https://cyberjapandata.gsi.go.jp/xyz/dem10b/${key}.txt`,
-  ];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
 
-  for (const url of urls) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) continue;
-
-      const text = await response.text();
-      const rows = text.trim().split('\n');
-      const grid: (number | null)[][] = [];
-
-      for (const row of rows) {
-        const cells = row.split(',').map((v) => {
-          const trimmed = v.trim();
-          if (trimmed === 'e' || trimmed === '') return null;
-          const num = parseFloat(trimmed);
-          return isNaN(num) ? null : num;
-        });
-        grid.push(cells);
-      }
-
-      tileCache.set(key, grid);
-      return grid;
-    } catch {
-      continue;
-    }
+  try {
+    // DEM5A と DEM10B を並列フェッチし、最初に成功したほうを採用
+    const text = await Promise.any([
+      fetchTileText(`https://cyberjapandata.gsi.go.jp/xyz/dem5a/${key}.txt`, controller.signal),
+      fetchTileText(`https://cyberjapandata.gsi.go.jp/xyz/dem10b/${key}.txt`, controller.signal),
+    ]);
+    const grid = parseTextTile(text);
+    tileCache.set(key, grid);
+    return grid;
+  } catch {
+    // 両方失敗またはタイムアウト
+  } finally {
+    clearTimeout(timeout);
   }
 
   // データなしの場合は null で埋めたグリッドを返す

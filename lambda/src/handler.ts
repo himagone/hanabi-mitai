@@ -158,9 +158,9 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
 /**
  * 単一地点のスコアリング
  *
- * 高速化: 全ネットワーク I/O を1回の Promise.all で並列実行
- * - 建物取得: 視線回廊の bbox のみ（従来の円形クエリより大幅に軽量）
- * - 標高取得: 基本2点 + 勾配4点を1バッチに統合
+ * 標高取得を最優先し、Overpass は間に合った場合のみ反映する。
+ * 標高データだけで計算できるスコア（仰角・標高・勾配）を先に確定し、
+ * Overpass が応答すれば LOS・accessibility も加味する。
  */
 async function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
   const { launchSite, viewerLocation, fireworkDiameter } = request;
@@ -174,17 +174,26 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
     { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
   ];
 
-  // 全ネットワーク I/O を並列実行
-  const [, elevations] = await Promise.all([
-    fetchBuildingsForLOS(viewerLocation, launchSite),
-    getElevationBatch([launchSite, viewerLocation, ...slopePoints]),
-  ]);
+  // Overpass を非ブロッキングで開始（完了を待たない）
+  const overpassPromise = fetchBuildingsForLOS(viewerLocation, launchSite);
+
+  // 標高取得（これだけ待つ）
+  const elevations = await getElevationBatch([launchSite, viewerLocation, ...slopePoints]);
 
   const launchSiteElevation = elevations[0] ?? 0;
   const viewerElevation = elevations[1];
 
   if (viewerElevation === null) {
     throw new Error('現在地の標高データを取得できませんでした');
+  }
+
+  // Overpass が既に完了していれば結果を反映、未完了なら待たない
+  const overpassDone = await Promise.race([
+    overpassPromise.then(() => true),
+    Promise.resolve(false),
+  ]);
+  if (!overpassDone) {
+    console.log('Overpass still pending, using defaults for LOS/accessibility');
   }
 
   const viewer = await fullScorePoint(

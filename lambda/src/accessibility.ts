@@ -270,14 +270,14 @@ export function getBuildingHeight(lng: number, lat: number): number {
 export async function fetchBuildingsForLOS(
   from: LatLng,
   to: LatLng,
-  bufferDeg: number = 0.003,
+  bufferDeg: number = 0.001,
 ): Promise<void> {
   const south = Math.min(from.lat, to.lat) - bufferDeg;
   const north = Math.max(from.lat, to.lat) + bufferDeg;
   const west = Math.min(from.lng, to.lng) - bufferDeg;
   const east = Math.max(from.lng, to.lng) + bufferDeg;
 
-  const query = `[out:json][timeout:10][bbox:${south},${west},${north},${east}];
+  const query = `[out:json][timeout:5][bbox:${south},${west},${north},${east}];
 (
   way["building"];
   way["landuse"="residential"];
@@ -293,12 +293,17 @@ export async function fetchBuildingsForLOS(
 );
 out geom;`;
 
+  // 3秒でタイムアウト → デフォルト値にフォールバック
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
   try {
     const url = 'https://overpass-api.de/api/interpreter';
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `data=${encodeURIComponent(query)}`,
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -369,9 +374,13 @@ out geom;`;
       `${cachedLandUse.length} land use polygons loaded`,
     );
   } catch (err) {
-    console.warn('Failed to fetch OSM data for LOS:', err);
+    // タイムアウトまたはネットワークエラー → デフォルト値で続行
+    const reason = err instanceof Error && err.name === 'AbortError' ? 'timeout' : err;
+    console.warn('Overpass fetch skipped:', reason);
     cachedBuildings = [];
     cachedLandUse = [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

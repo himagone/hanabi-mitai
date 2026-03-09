@@ -578,17 +578,15 @@ body {
 }
 
 #score-card-close {
-  position: absolute;
-  top: 10px;
-  right: 12px;
+  display: block;
+  margin-left: auto;
   background: none;
   border: none;
   color: var(--text-muted);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 8px;
-  z-index: 1;
+  padding: 0 4px 4px;
 }
 
 #score-card-close:active {

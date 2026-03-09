@@ -413,9 +413,12 @@ function expandScoreCard(): void {
 }
 
 if (isMobile && mobileScoreCard) {
-  // ×ボタンで最小化
+  // ×ボタンで最小化（バブリングを停止して親の展開ハンドラを発火させない）
   const closeBtn = document.getElementById('score-card-close');
-  closeBtn?.addEventListener('click', minimizeScoreCard);
+  closeBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    minimizeScoreCard();
+  });
 
   // 最小化状態のカードタップで展開
   mobileScoreCard.addEventListener('click', () => {
