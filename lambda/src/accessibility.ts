@@ -262,6 +262,120 @@ export function getBuildingHeight(lng: number, lat: number): number {
 }
 
 /**
+ * 視線回廊に沿った建物のみを取得（score-point 用の高速版）
+ *
+ * 2点間の bbox + バッファで建物だけを取得する。
+ * 土地利用は取得しない（accessibilityScore はデフォルト 0.6 を返す）。
+ */
+export async function fetchBuildingsForLOS(
+  from: LatLng,
+  to: LatLng,
+  bufferDeg: number = 0.003,
+): Promise<void> {
+  const south = Math.min(from.lat, to.lat) - bufferDeg;
+  const north = Math.max(from.lat, to.lat) + bufferDeg;
+  const west = Math.min(from.lng, to.lng) - bufferDeg;
+  const east = Math.max(from.lng, to.lng) + bufferDeg;
+
+  const query = `[out:json][timeout:10][bbox:${south},${west},${north},${east}];
+(
+  way["building"];
+  way["landuse"="residential"];
+  relation["landuse"="residential"];
+  way["leisure"="park"];
+  relation["leisure"="park"];
+  way["leisure"="garden"];
+  way["landuse"="grass"];
+  way["leisure"="pitch"];
+  way["leisure"="playground"];
+  way["natural"="riverbank"];
+  way["waterway"="riverbank"];
+);
+out geom;`;
+
+  try {
+    const url = 'https://overpass-api.de/api/interpreter';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+    });
+
+    if (!response.ok) {
+      console.warn('Overpass API error:', response.status);
+      cachedBuildings = [];
+      cachedLandUse = [];
+      return;
+    }
+
+    const data = await response.json() as {
+      elements: Array<{
+        geometry?: Array<{ lon: number; lat: number }>;
+        tags?: Record<string, string>;
+      }>;
+    };
+
+    cachedBuildings = [];
+    cachedLandUse = [];
+
+    for (const element of data.elements) {
+      if (!element.geometry || element.geometry.length < 3) continue;
+      const coords: [number, number][] = element.geometry.map(
+        (g) => [g.lon, g.lat],
+      );
+      const tags = element.tags || {};
+
+      // 建物
+      if (tags.building) {
+        let minLng = Infinity, maxLng = -Infinity;
+        let minLat = Infinity, maxLat = -Infinity;
+        for (const [cLng, cLat] of coords) {
+          if (cLng < minLng) minLng = cLng;
+          if (cLng > maxLng) maxLng = cLng;
+          if (cLat < minLat) minLat = cLat;
+          if (cLat > maxLat) maxLat = cLat;
+        }
+        cachedBuildings.push({
+          coords,
+          height: estimateBuildingHeight(tags),
+          minLng, maxLng, minLat, maxLat,
+        });
+        continue;
+      }
+
+      // 土地利用
+      let type: 'park' | 'residential';
+      if (
+        tags.leisure === 'park' ||
+        tags.leisure === 'garden' ||
+        tags.leisure === 'pitch' ||
+        tags.leisure === 'playground' ||
+        tags.landuse === 'grass' ||
+        tags.natural === 'riverbank' ||
+        tags.waterway === 'riverbank'
+      ) {
+        type = 'park';
+      } else {
+        type = 'residential';
+      }
+      cachedLandUse.push({ type, coords });
+    }
+
+    cachedCenter = null;
+    cachedRadius = 0;
+
+    console.log(
+      `LOS corridor: ${cachedBuildings.length} buildings, ` +
+      `${cachedLandUse.length} land use polygons loaded`,
+    );
+  } catch (err) {
+    console.warn('Failed to fetch OSM data for LOS:', err);
+    cachedBuildings = [];
+    cachedLandUse = [];
+  }
+}
+
+/**
  * キャッシュクリア
  */
 export function clearLandUseCache(): void {

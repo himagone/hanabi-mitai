@@ -1,9 +1,9 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse, GridPoint, GeoJSON } from './types.js';
-import { generateGrid, filterExclusionZones, haversineDistance } from './grid.js';
+import { generateGrid, filterExclusionZones } from './grid.js';
 import { getElevationBatch, getElevation } from './elevation.js';
 import { quickScorePoint, fullScorePoint } from './scoring.js';
-import { fetchLandUseAndBuildings } from './accessibility.js';
+import { fetchLandUseAndBuildings, fetchBuildingsForLOS } from './accessibility.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -157,16 +157,27 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
 
 /**
  * 単一地点のスコアリング
+ *
+ * 高速化: 全ネットワーク I/O を1回の Promise.all で並列実行
+ * - 建物取得: 視線回廊の bbox のみ（従来の円形クエリより大幅に軽量）
+ * - 標高取得: 基本2点 + 勾配4点を1バッチに統合
  */
 async function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
   const { launchSite, viewerLocation, fireworkDiameter } = request;
 
-  const dist = haversineDistance(launchSite, viewerLocation);
-  const osmRadius = Math.min(Math.max(dist + 500, 1000), 5000);
+  // 勾配用の隣接点
+  const SLOPE_DELTA = 0.0003;
+  const slopePoints: import('./types.js').LatLng[] = [
+    { lat: viewerLocation.lat + SLOPE_DELTA, lng: viewerLocation.lng },
+    { lat: viewerLocation.lat - SLOPE_DELTA, lng: viewerLocation.lng },
+    { lat: viewerLocation.lat, lng: viewerLocation.lng + SLOPE_DELTA },
+    { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
+  ];
 
+  // 全ネットワーク I/O を並列実行
   const [, elevations] = await Promise.all([
-    fetchLandUseAndBuildings(launchSite, osmRadius),
-    getElevationBatch([launchSite, viewerLocation]),
+    fetchBuildingsForLOS(viewerLocation, launchSite),
+    getElevationBatch([launchSite, viewerLocation, ...slopePoints]),
   ]);
 
   const launchSiteElevation = elevations[0] ?? 0;
@@ -175,17 +186,6 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
   if (viewerElevation === null) {
     throw new Error('現在地の標高データを取得できませんでした');
   }
-
-  // 勾配用のタイルを事前取得
-  // (LOS は建物ポリゴン交差ベースのため事前サンプリング不要)
-  const SLOPE_DELTA = 0.0003;
-  const prefetchPoints: import('./types.js').LatLng[] = [
-    { lat: viewerLocation.lat + SLOPE_DELTA, lng: viewerLocation.lng },
-    { lat: viewerLocation.lat - SLOPE_DELTA, lng: viewerLocation.lng },
-    { lat: viewerLocation.lat, lng: viewerLocation.lng + SLOPE_DELTA },
-    { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
-  ];
-  await getElevationBatch(prefetchPoints);
 
   const viewer = await fullScorePoint(
     { lat: viewerLocation.lat, lng: viewerLocation.lng, elevation: viewerElevation },
