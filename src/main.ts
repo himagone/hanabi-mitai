@@ -387,6 +387,7 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   mobileScoreCard.classList.remove('minimized');
   mobileScoreCard.style.transform = '';
   bsMinimized = false;
+  if (scoreHereBtn) scoreHereBtn.classList.add('hidden');
 }
 
 // ============================================================
@@ -403,6 +404,7 @@ function minimizeScoreCard(): void {
   bsMinimized = true;
   mobileScoreCard.classList.add('minimized');
   mobileScoreCard.style.transform = `translateY(${minY}px)`;
+  if (scoreHereBtn) scoreHereBtn.classList.remove('hidden');
 }
 
 function expandScoreCard(): void {
@@ -410,6 +412,7 @@ function expandScoreCard(): void {
   bsMinimized = false;
   mobileScoreCard.classList.remove('minimized');
   mobileScoreCard.style.transform = '';
+  if (scoreHereBtn) scoreHereBtn.classList.add('hidden');
 }
 
 if (isMobile && mobileScoreCard) {
