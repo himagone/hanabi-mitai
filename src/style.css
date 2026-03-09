@@ -575,17 +575,12 @@ body {
   backdrop-filter: blur(24px);
   border-top: 1px solid var(--border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 8px 20px calc(28px + env(safe-area-inset-bottom, 0px));
-  max-height: 60dvh;
-  max-height: 60vh;
+  padding: 8px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  max-height: 50%;
   overflow-y: auto;
   transform: translateY(0);
   transition: transform 0.3s ease-out;
   will-change: transform;
-}
-
-@supports (max-height: 60dvh) {
-  #mobile-score-card { max-height: 60dvh; }
 }
 
 #mobile-score-card.minimized {
@@ -614,11 +609,11 @@ body {
   gap: 12px;
   border-left: 3px solid var(--accent);
   padding-left: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .score-big {
-  font-size: 2.8rem;
+  font-size: 2.2rem;
   font-weight: 800;
   color: var(--text-primary);
   line-height: 1;
@@ -635,13 +630,13 @@ body {
 .score-card-details {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .score-detail-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--text-primary);
   padding: 0 4px;
 }
@@ -653,8 +648,8 @@ body {
 .score-card-bar {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-top: 10px;
+  gap: 4px;
+  margin-top: 8px;
 }
 
 .bar-item {
@@ -690,8 +685,8 @@ body {
 .bar-fill.bar-yellow { background: var(--yellow); }
 
 .score-reason {
-  margin-top: 10px;
-  font-size: 0.82rem;
+  margin-top: 6px;
+  font-size: 0.78rem;
   color: var(--text-secondary);
   padding: 0 4px;
 }

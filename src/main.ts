@@ -398,7 +398,7 @@ let bsMinimized = false;
 
 function minimizeScoreCard(): void {
   if (!mobileScoreCard || mobileScoreCard.classList.contains('hidden')) return;
-  const fullHeight = mobileScoreCard.scrollHeight;
+  const fullHeight = mobileScoreCard.offsetHeight;
   const minY = fullHeight - BOTTOM_SHEET_PEEK;
   bsMinimized = true;
   mobileScoreCard.classList.add('minimized');
