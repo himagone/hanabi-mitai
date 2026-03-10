@@ -565,9 +565,16 @@ export function setLaunchMarker(lat: number, lng: number): void {
   if (launchMarker) launchMarker.remove();
 
   const el = document.createElement('div');
-  el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
-    <circle cx="16" cy="16" r="14" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
-    <text x="16" y="21" text-anchor="middle" fill="#070c23" font-size="16" font-weight="bold">*</text>
+  el.className = 'launch-marker';
+  el.innerHTML = `<svg width="40" height="40" viewBox="0 0 40 40">
+    <defs>
+      <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <circle cx="20" cy="20" r="18" fill="url(#glow)"/>
+    <text x="20" y="26" text-anchor="middle" font-size="22">🎆</text>
   </svg>`;
 
   launchMarker = new maplibregl.Marker({ element: el })
