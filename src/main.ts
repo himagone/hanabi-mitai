@@ -376,10 +376,10 @@ function showMobileScoreCard(response: ScorePointResponse): void {
     if (badge) { badge.textContent = 'まあまあ'; badge.className = 'score-badge good'; }
   } else if (totalPercent >= 30) {
     if (mainEl) mainEl.style.borderLeftColor = '#fbbf24';
-    if (badge) { badge.textContent = '微妙'; badge.className = 'score-badge fair'; }
+    if (badge) { badge.textContent = 'ほぼ見えない'; badge.className = 'score-badge fair'; }
   } else {
     if (mainEl) mainEl.style.borderLeftColor = '#f87171';
-    if (badge) { badge.textContent = '厳しい'; badge.className = 'score-badge poor'; }
+    if (badge) { badge.textContent = '見えない'; badge.className = 'score-badge poor'; }
   }
 
   // Reason (prominent, right below score)
