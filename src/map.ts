@@ -567,12 +567,12 @@ export function setLaunchMarker(lat: number, lng: number): void {
   const el = document.createElement('div');
   el.className = 'launch-marker';
   el.innerHTML = `<svg width="28" height="28" viewBox="0 0 28 28">
-    <circle cx="14" cy="14" r="12" fill="#ff6b4a" fill-opacity="0.15" stroke="#ff6b4a" stroke-width="1.5"/>
-    <line x1="14" y1="6" x2="14" y2="22" stroke="#ff6b4a" stroke-width="1.2" stroke-linecap="round"/>
-    <line x1="6" y1="14" x2="22" y2="14" stroke="#ff6b4a" stroke-width="1.2" stroke-linecap="round"/>
-    <line x1="8" y1="8" x2="20" y2="20" stroke="#ff6b4a" stroke-width="1" stroke-linecap="round"/>
-    <line x1="20" y1="8" x2="8" y2="20" stroke="#ff6b4a" stroke-width="1" stroke-linecap="round"/>
-    <circle cx="14" cy="14" r="3" fill="#ff6b4a"/>
+    <circle cx="14" cy="14" r="12" fill="#8bb3e4" fill-opacity="0.15" stroke="#8bb3e4" stroke-width="1.5"/>
+    <line x1="14" y1="6" x2="14" y2="22" stroke="#c8a2e8" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="6" y1="14" x2="22" y2="14" stroke="#c8a2e8" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="8" y1="8" x2="20" y2="20" stroke="#fae1f8" stroke-width="1" stroke-linecap="round"/>
+    <line x1="20" y1="8" x2="8" y2="20" stroke="#fae1f8" stroke-width="1" stroke-linecap="round"/>
+    <circle cx="14" cy="14" r="3" fill="#8bb3e4"/>
   </svg>`;
 
   launchMarker = new maplibregl.Marker({ element: el })
