@@ -29,7 +29,7 @@ export async function checkLineOfSight(
   if (totalDist < 10) return 1.0;
 
   const buildings = getCachedBuildings();
-  if (buildings === null) return 0.8; // データ未取得 → やや不確実
+  if (buildings === null) return -1; // データ未取得
   if (buildings.length === 0) return 1.0; // 取得済みで建物なし → 見通し良好
 
   // 視線の2D方向ベクトル (lng, lat)

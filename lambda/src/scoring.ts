@@ -155,12 +155,14 @@ function generateReason(
     reasons.push('住宅地');
   }
 
-  if (scores.lineOfSight >= 0.9) {
-    reasons.push('遮蔽ほぼなし');
+  if (scores.lineOfSight < 0) {
+    reasons.push('周辺データ不足');
+  } else if (scores.lineOfSight >= 0.9) {
+    reasons.push('視界が開けている');
   } else if (scores.lineOfSight >= 0.5) {
-    reasons.push('建物等が遮る');
+    reasons.push('一部障害物あり');
   } else if (scores.lineOfSight < 0.3) {
-    reasons.push('建物で見えない');
+    reasons.push('建物が視界を遮る');
   }
 
   if (viewingAngleDeg >= 25 && viewingAngleDeg <= 45) {
@@ -257,10 +259,12 @@ export async function fullScorePoint(
   const accessScore = accessibilityScore(point);
 
   const distVisibility = distanceVisibilityScore(dist, fireworkDiameter);
+  const losAvailable = losScore >= 0;
+  const effectiveLos = losAvailable ? losScore : 0.8; // 未取得時は控えめに0.8で計算
   const baseTotal =
     WEIGHTS.viewingAngle * angleScore +
     WEIGHTS.elevation * elevScore +
-    WEIGHTS.lineOfSight * losScore +
+    WEIGHTS.lineOfSight * effectiveLos +
     WEIGHTS.slope * slopeS +
     WEIGHTS.accessibility * accessScore;
 
@@ -268,7 +272,7 @@ export async function fullScorePoint(
     distance: distVisibility,
     viewingAngle: angleScore,
     elevation: elevScore,
-    lineOfSight: losScore,
+    lineOfSight: losAvailable ? losScore : -1, // -1 = データ未取得
     slope: slopeS,
     accessibility: accessScore,
     total: baseTotal * distVisibility,

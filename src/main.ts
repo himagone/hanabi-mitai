@@ -392,10 +392,11 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   const angleEl = document.getElementById('sc-angle');
   if (angleEl) angleEl.textContent = `${v.viewingAngleDeg}°`;
 
-  const losPercent = Math.round(v.score.lineOfSight * 100);
+  const losRaw = v.score.lineOfSight;
   const losEl = document.getElementById('sc-los');
   if (losEl) losEl.textContent =
-    losPercent >= 90 ? '見通しが良い' : losPercent >= 50 ? '建物等が遮る' : '建物等が遮る';
+    losRaw < 0 ? '周辺データ不足' :
+    losRaw >= 0.9 ? '視界が開けている' : losRaw >= 0.5 ? '一部障害物あり' : '建物が視界を遮る';
 
   const accessScore = v.score.accessibility;
   const accessEl = document.getElementById('sc-access-label');
@@ -414,7 +415,7 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   const barAccess = document.getElementById('bar-access') as HTMLElement | null;
   const barSlope = document.getElementById('bar-slope') as HTMLElement | null;
   if (barAngle) barAngle.style.width = `${v.score.viewingAngle * 100}%`;
-  if (barLos) barLos.style.width = `${v.score.lineOfSight * 100}%`;
+  if (barLos) barLos.style.width = losRaw < 0 ? '0%' : `${losRaw * 100}%`;
   if (barAccess) barAccess.style.width = `${accessScore * 100}%`;
   if (barSlope) barSlope.style.width = `${v.score.slope * 100}%`;
 
