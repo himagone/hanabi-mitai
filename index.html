@@ -52,42 +52,50 @@
     </div>
 
     <div id="mobile-score-card" class="hidden">
-      <button id="score-card-close" type="button" aria-label="閉じる">&times;</button>
-      <div class="score-card-main">
-        <div class="score-big"><span id="score-value">--</span><span class="score-unit">点</span></div>
+      <div class="score-card-header">
+        <div class="score-card-main">
+          <div class="score-big"><span id="score-value">--</span><span class="score-unit">点</span></div>
+          <span class="score-badge" id="score-badge"></span>
+        </div>
+        <button id="score-card-close" type="button" aria-label="閉じる">&times;</button>
       </div>
+      <div class="score-reason" id="sc-reason"></div>
       <div class="score-card-details">
-        <div class="score-detail-row">
-          <span>打上げまで</span><span id="sc-distance">--</span>
-        </div>
-        <div class="score-detail-row">
-          <span>仰角</span><span id="sc-angle">--</span>
-        </div>
-        <div class="score-detail-row">
-          <span>標高差</span><span id="sc-elevation">--</span>
-        </div>
-        <div class="score-detail-row">
-          <span>遮蔽</span><span id="sc-los">--</span>
-        </div>
-        <div class="score-card-bar">
-          <div class="bar-item">
-            <div class="bar-track"><div class="bar-fill" id="bar-angle" style="width:0"></div></div>
-            <span>角度</span>
-          </div>
-          <div class="bar-item">
-            <div class="bar-track"><div class="bar-fill bar-green" id="bar-los" style="width:0"></div></div>
-            <span>視界</span>
-          </div>
-          <div class="bar-item">
-            <div class="bar-track"><div class="bar-fill bar-purple" id="bar-access" style="width:0"></div></div>
-            <span>場所</span>
-          </div>
-          <div class="bar-item">
-            <div class="bar-track"><div class="bar-fill bar-yellow" id="bar-slope" style="width:0"></div></div>
-            <span>地形</span>
+        <div class="score-detail-item">
+          <div class="detail-label-row">
+            <span class="detail-label">距離</span>
+            <span class="detail-value" id="sc-distance">--</span>
           </div>
         </div>
-        <div class="score-reason" id="sc-reason"></div>
+        <div class="score-detail-item">
+          <div class="detail-label-row">
+            <span class="detail-label">見上げる角度</span>
+            <span class="detail-value" id="sc-angle">--</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" id="bar-angle" style="width:0"></div></div>
+        </div>
+        <div class="score-detail-item">
+          <div class="detail-label-row">
+            <span class="detail-label">見通し</span>
+            <span class="detail-value" id="sc-los">--</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill bar-green" id="bar-los" style="width:0"></div></div>
+        </div>
+        <div class="score-detail-item">
+          <div class="detail-label-row">
+            <span class="detail-label">周辺環境</span>
+            <span class="detail-value" id="sc-access-label">--</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill bar-purple" id="bar-access" style="width:0"></div></div>
+        </div>
+        <div class="score-detail-item">
+          <div class="detail-label-row">
+            <span class="detail-label">地形</span>
+            <span class="detail-value" id="sc-elevation">--</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill bar-yellow" id="bar-slope" style="width:0"></div></div>
+        </div>
+        <button id="score-retry-btn" type="button" class="score-retry">別の場所で調べる</button>
       </div>
     </div>
 

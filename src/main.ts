@@ -323,7 +323,7 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
   }
   const loadingTextEl = document.getElementById('loading-text');
   if (loadingTextEl) loadingTextEl.textContent = '計算中…';
-  loadingEl.classList.remove('hidden');
+  if (loadingEl) loadingEl.classList.remove('hidden');
   editorHint.classList.add('hidden');
   mobileManualMode = false;
 
@@ -343,7 +343,7 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
     const message = err instanceof Error ? err.message : '不明なエラー';
     alert(`スコア計算に失敗しました: ${message}`);
   } finally {
-    loadingEl.classList.add('hidden');
+    if (loadingEl) loadingEl.classList.add('hidden');
     if (scoreHereBtn) {
       scoreHereBtn.disabled = false;
       scoreHereBtn.textContent = 'ここから見える？';
@@ -354,57 +354,69 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
 function showMobileScoreCard(response: ScorePointResponse): void {
   if (!mobileScoreCard) return;
 
-  const v = response.viewer;
+  const v = response?.viewer;
+  if (!v?.score) {
+    console.error('Invalid score response:', response);
+    alert('スコアデータの取得に失敗しました');
+    return;
+  }
   const totalPercent = Math.round(v.score.total * 100);
 
   // Score + color
-  document.getElementById('score-value')!.textContent = String(totalPercent);
-  const mainEl = mobileScoreCard.querySelector('.score-card-main') as HTMLElement;
-  const badge = document.getElementById('score-badge')!;
+  const scoreValueEl = document.getElementById('score-value');
+  if (scoreValueEl) scoreValueEl.textContent = String(totalPercent);
+  const mainEl = mobileScoreCard.querySelector('.score-card-main') as HTMLElement | null;
+  const badge = document.getElementById('score-badge');
 
   if (totalPercent >= 70) {
-    mainEl.style.borderLeftColor = '#6ee7a0';
-    badge.textContent = 'よく見える';
-    badge.className = 'score-badge excellent';
+    if (mainEl) mainEl.style.borderLeftColor = '#6ee7a0';
+    if (badge) { badge.textContent = 'よく見える'; badge.className = 'score-badge excellent'; }
   } else if (totalPercent >= 50) {
-    mainEl.style.borderLeftColor = '#8bb3e4';
-    badge.textContent = 'まあまあ';
-    badge.className = 'score-badge good';
+    if (mainEl) mainEl.style.borderLeftColor = '#8bb3e4';
+    if (badge) { badge.textContent = 'まあまあ'; badge.className = 'score-badge good'; }
   } else if (totalPercent >= 30) {
-    mainEl.style.borderLeftColor = '#fbbf24';
-    badge.textContent = '微妙';
-    badge.className = 'score-badge fair';
+    if (mainEl) mainEl.style.borderLeftColor = '#fbbf24';
+    if (badge) { badge.textContent = '微妙'; badge.className = 'score-badge fair'; }
   } else {
-    mainEl.style.borderLeftColor = '#f87171';
-    badge.textContent = '厳しい';
-    badge.className = 'score-badge poor';
+    if (mainEl) mainEl.style.borderLeftColor = '#f87171';
+    if (badge) { badge.textContent = '厳しい'; badge.className = 'score-badge poor'; }
   }
 
   // Reason (prominent, right below score)
-  document.getElementById('sc-reason')!.textContent = v.reason;
+  const reasonEl = document.getElementById('sc-reason');
+  if (reasonEl) reasonEl.textContent = v.reason;
 
   // Details: human-friendly labels + values
-  document.getElementById('sc-distance')!.textContent = distanceWithWalk(v.distanceMeters);
-  document.getElementById('sc-angle')!.textContent = `${v.viewingAngleDeg}°`;
+  const distEl = document.getElementById('sc-distance');
+  if (distEl) distEl.textContent = distanceWithWalk(v.distanceMeters);
+  const angleEl = document.getElementById('sc-angle');
+  if (angleEl) angleEl.textContent = `${v.viewingAngleDeg}°`;
 
   const losPercent = Math.round(v.score.lineOfSight * 100);
-  document.getElementById('sc-los')!.textContent =
+  const losEl = document.getElementById('sc-los');
+  if (losEl) losEl.textContent =
     losPercent >= 90 ? '遮るものなし' : losPercent >= 50 ? '少し遮りあり' : '建物が遮る';
 
   const accessScore = v.score.accessibility;
-  document.getElementById('sc-access-label')!.textContent =
+  const accessEl = document.getElementById('sc-access-label');
+  if (accessEl) accessEl.textContent =
     accessScore >= 0.9 ? '公園・広場' : accessScore <= 0.3 ? '住宅地' : '一般';
 
   const relElev = v.relativeElevation;
-  document.getElementById('sc-elevation')!.textContent =
+  const elevEl = document.getElementById('sc-elevation');
+  if (elevEl) elevEl.textContent =
     relElev > 10 ? `高台 +${relElev}m` : relElev > 3 ? `やや高い +${relElev}m` :
     relElev < -5 ? `低地 ${relElev}m` : `${relElev > 0 ? '+' : ''}${relElev}m`;
 
   // Bars
-  (document.getElementById('bar-angle') as HTMLElement).style.width = `${v.score.viewingAngle * 100}%`;
-  (document.getElementById('bar-los') as HTMLElement).style.width = `${v.score.lineOfSight * 100}%`;
-  (document.getElementById('bar-access') as HTMLElement).style.width = `${accessScore * 100}%`;
-  (document.getElementById('bar-slope') as HTMLElement).style.width = `${v.score.slope * 100}%`;
+  const barAngle = document.getElementById('bar-angle') as HTMLElement | null;
+  const barLos = document.getElementById('bar-los') as HTMLElement | null;
+  const barAccess = document.getElementById('bar-access') as HTMLElement | null;
+  const barSlope = document.getElementById('bar-slope') as HTMLElement | null;
+  if (barAngle) barAngle.style.width = `${v.score.viewingAngle * 100}%`;
+  if (barLos) barLos.style.width = `${v.score.lineOfSight * 100}%`;
+  if (barAccess) barAccess.style.width = `${accessScore * 100}%`;
+  if (barSlope) barSlope.style.width = `${v.score.slope * 100}%`;
 
   mobileScoreCard.classList.remove('hidden');
   mobileScoreCard.classList.remove('minimized');
