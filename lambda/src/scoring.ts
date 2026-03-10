@@ -156,17 +156,17 @@ function generateReason(
   }
 
   if (scores.lineOfSight >= 0.9) {
-    reasons.push('遮蔽なし');
+    reasons.push('遮蔽ほぼなし');
   } else if (scores.lineOfSight >= 0.5) {
-    reasons.push('見通し良');
+    reasons.push('建物等が遮る');
   } else if (scores.lineOfSight < 0.3) {
-    reasons.push('建物で遮蔽あり');
+    reasons.push('建物で見えない');
   }
 
   if (viewingAngleDeg >= 25 && viewingAngleDeg <= 45) {
-    reasons.push('仰角良好');
+    reasons.push('見上げやすい');
   } else if (viewingAngleDeg >= 10 && viewingAngleDeg < 25) {
-    reasons.push('仰角やや低い');
+    reasons.push('正面に見える');
   }
 
   if (relativeElevation > 10) {
