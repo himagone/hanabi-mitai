@@ -23,9 +23,10 @@ export interface BuildingPolygon {
 
 /**
  * キャッシュ済み建物データを返す
+ * null = 未取得、[] = 取得済みで建物なし
  */
-export function getCachedBuildings(): BuildingPolygon[] {
-  return cachedBuildings ?? [];
+export function getCachedBuildings(): BuildingPolygon[] | null {
+  return cachedBuildings;
 }
 
 let cachedLandUse: LandUsePolygon[] | null = null;

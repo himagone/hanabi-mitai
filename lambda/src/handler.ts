@@ -174,26 +174,18 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
     { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
   ];
 
-  // Overpass を非ブロッキングで開始（完了を待たない）
+  // Overpass と標高取得を並列実行
   const overpassPromise = fetchBuildingsForLOS(viewerLocation, launchSite);
+  const elevationPromise = getElevationBatch([launchSite, viewerLocation, ...slopePoints]);
 
-  // 標高取得（これだけ待つ）
-  const elevations = await getElevationBatch([launchSite, viewerLocation, ...slopePoints]);
+  // 両方完了を待つ（Overpass は内部で3秒タイムアウトあり）
+  const [, elevations] = await Promise.all([overpassPromise, elevationPromise]);
 
   const launchSiteElevation = elevations[0] ?? 0;
   const viewerElevation = elevations[1];
 
   if (viewerElevation === null) {
     throw new Error('現在地の標高データを取得できませんでした');
-  }
-
-  // Overpass が既に完了していれば結果を反映、未完了なら待たない
-  const overpassDone = await Promise.race([
-    overpassPromise.then(() => true),
-    Promise.resolve(false),
-  ]);
-  if (!overpassDone) {
-    console.log('Overpass still pending, using defaults for LOS/accessibility');
   }
 
   const viewer = await fullScorePoint(
