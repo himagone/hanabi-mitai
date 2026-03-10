@@ -395,7 +395,7 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   const losPercent = Math.round(v.score.lineOfSight * 100);
   const losEl = document.getElementById('sc-los');
   if (losEl) losEl.textContent =
-    losPercent >= 90 ? '遮るものなし' : losPercent >= 50 ? '少し遮りあり' : '建物が遮る';
+    losPercent >= 90 ? '見通しが良い' : losPercent >= 50 ? '建物等が遮る' : '建物等が遮る';
 
   const accessScore = v.score.accessibility;
   const accessEl = document.getElementById('sc-access-label');
