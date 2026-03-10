@@ -566,15 +566,13 @@ export function setLaunchMarker(lat: number, lng: number): void {
 
   const el = document.createElement('div');
   el.className = 'launch-marker';
-  el.innerHTML = `<svg width="40" height="40" viewBox="0 0 40 40">
-    <defs>
-      <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.6"/>
-        <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
-      </radialGradient>
-    </defs>
-    <circle cx="20" cy="20" r="18" fill="url(#glow)"/>
-    <text x="20" y="26" text-anchor="middle" font-size="22">🎆</text>
+  el.innerHTML = `<svg width="28" height="28" viewBox="0 0 28 28">
+    <circle cx="14" cy="14" r="12" fill="#ff6b4a" fill-opacity="0.15" stroke="#ff6b4a" stroke-width="1.5"/>
+    <line x1="14" y1="6" x2="14" y2="22" stroke="#ff6b4a" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="6" y1="14" x2="22" y2="14" stroke="#ff6b4a" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="8" y1="8" x2="20" y2="20" stroke="#ff6b4a" stroke-width="1" stroke-linecap="round"/>
+    <line x1="20" y1="8" x2="8" y2="20" stroke="#ff6b4a" stroke-width="1" stroke-linecap="round"/>
+    <circle cx="14" cy="14" r="3" fill="#ff6b4a"/>
   </svg>`;
 
   launchMarker = new maplibregl.Marker({ element: el })
