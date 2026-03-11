@@ -100,6 +100,16 @@ body {
   gap: 3px;
 }
 
+.preset-hint {
+  font-size: 0.75rem;
+  color: var(--yellow);
+  margin-top: 2px;
+}
+
+.preset-hint.hidden {
+  display: none;
+}
+
 .input-group label {
   font-size: 0.65rem;
   color: var(--text-muted);

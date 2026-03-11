@@ -43,6 +43,7 @@ const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTML
 // Mobile only
 const scoreHereBtn = document.getElementById('score-here-btn') as HTMLButtonElement | null;
 const mobileScoreCard = document.getElementById('mobile-score-card') as HTMLElement | null;
+const presetHint = document.getElementById('preset-hint') as HTMLElement | null;
 
 let isAnalyzing = false;
 let mobileManualMode = false; // GPS失敗時に地図タップで現在地指定
@@ -287,8 +288,19 @@ async function runMobileScore(): Promise<void> {
   const lng = parseFloat(lngInput.value);
 
   if (isNaN(lat) || isNaN(lng)) {
-    editorHint.classList.remove('hidden');
-    editorHintText.textContent = '花火大会を選択してください';
+    if (isMobile && presetHint) {
+      presetHint.textContent = '花火大会を選ぶと使えます';
+      presetHint.classList.remove('hidden');
+      presetSelect.style.borderColor = 'var(--yellow)';
+      // プルダウンを選択したらヒントとハイライトを消す
+      presetSelect.addEventListener('change', () => {
+        presetHint.classList.add('hidden');
+        presetSelect.style.borderColor = '';
+      }, { once: true });
+    } else {
+      editorHint.classList.remove('hidden');
+      editorHintText.textContent = '花火大会を選択してください';
+    }
     return;
   }
 
