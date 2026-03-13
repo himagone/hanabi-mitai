@@ -66,7 +66,14 @@ export function initMap(
     'top-left',
   );
 
-  map.on('load', initLayers);
+  map.on('load', () => {
+    initLayers();
+    map!.resize();
+  });
+
+  // フォント・スタイル適用完了後にコンテナサイズを再計測
+  document.fonts.ready.then(() => map?.resize());
+  window.addEventListener('resize', () => map?.resize());
   map.on('click', handleClick);
   map.on('mousedown', handleMouseDown);
   map.on('mousemove', handleMouseMove);

@@ -733,8 +733,12 @@ body {
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   #controls {
-    gap: 24px;
+    gap: 8px;
     padding: 8px 12px;
+  }
+
+  #controls .input-group:first-child {
+    width: 100%;
   }
 
   #header {
@@ -765,6 +769,9 @@ body {
   }
 
   #preset {
-    width: 150px;
+    width: 100%;
+    font-size: 1rem;
+    padding: 10px 12px;
+    min-height: 44px;
   }
 }
