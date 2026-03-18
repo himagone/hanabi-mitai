@@ -16,6 +16,7 @@ import {
   setViewerMarker,
   fitToLaunchAndViewer,
   clearViewerMarker,
+  flyToCenter,
 } from './map.js';
 import { analyzePosition, scorePoint } from './api.js';
 import type { AnalyzeResponse, ScorePointResponse } from './types.js';
@@ -554,6 +555,7 @@ presetSelect.addEventListener('change', () => {
   const diameterAttr = selectedOption?.getAttribute('data-diameter');
   currentFireworkDiameter = diameterAttr ? parseInt(diameterAttr, 10) : undefined;
   setLaunchSite(lat, lng);
+  flyToCenter(lat, lng, 14);
   if (isMobile) {
     mobileScoreCard?.classList.add('hidden');
     clearPendingPin();

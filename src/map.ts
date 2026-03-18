@@ -750,6 +750,11 @@ export function fitToLaunchAndViewer(bottomPadding?: number): void {
   map.fitBounds(bounds, { padding: pad, maxZoom: 15 });
 }
 
+export function flyToCenter(lat: number, lng: number, zoom?: number): void {
+  if (!map) return;
+  map.flyTo({ center: [lng, lat], zoom: zoom ?? map.getZoom(), duration: 800 });
+}
+
 export function clearViewerMarker(): void {
   if (viewerMarker) {
     viewerMarker.remove();
