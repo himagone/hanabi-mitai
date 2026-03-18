@@ -44,10 +44,15 @@ const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTML
 const scoreHereBtn = document.getElementById('score-here-btn') as HTMLButtonElement | null;
 const mobileScoreCard = document.getElementById('mobile-score-card') as HTMLElement | null;
 const presetHint = document.getElementById('preset-hint') as HTMLElement | null;
+const mobilePinActions = document.getElementById('mobile-pin-actions') as HTMLElement | null;
+const pinAnalyzeBtn = document.getElementById('pin-analyze-btn') as HTMLButtonElement | null;
+const pinRetryBtn = document.getElementById('pin-retry-btn') as HTMLButtonElement | null;
 
 let isAnalyzing = false;
-let mobileManualMode = false; // GPS失敗時に地図タップで現在地指定
 let currentFireworkDiameter: number | undefined;
+// モバイル: ピン設置済みの座標を保持（API未呼び出し）
+let pendingViewerLat: number | null = null;
+let pendingViewerLng: number | null = null;
 
 // Apply mobile class for CSS
 if (isMobile) {
@@ -256,7 +261,24 @@ function showDesktopResults(response: AnalyzeResponse): void {
 // ============================================================
 
 if (isMobile && scoreHereBtn) {
-  scoreHereBtn.addEventListener('click', runMobileScore);
+  scoreHereBtn.addEventListener('click', runMobileGPS);
+}
+
+// ピン設置後の確認ボタン
+if (isMobile && pinAnalyzeBtn) {
+  pinAnalyzeBtn.addEventListener('click', () => {
+    if (pendingViewerLat != null && pendingViewerLng != null) {
+      hidePinActions();
+      scoreFromLocation(pendingViewerLat, pendingViewerLng);
+    }
+  });
+}
+if (isMobile && pinRetryBtn) {
+  pinRetryBtn.addEventListener('click', () => {
+    clearPendingPin();
+    editorHint.classList.remove('hidden');
+    editorHintText.textContent = '地図タップで見え方を確認';
+  });
 }
 
 function getCurrentPosition(): Promise<GeolocationPosition> {
@@ -283,7 +305,8 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
   });
 }
 
-async function runMobileScore(): Promise<void> {
+/** GPS取得 → ピン設置 → 確認ボタン表示 */
+async function runMobileGPS(): Promise<void> {
   const lat = parseFloat(latInput.value);
   const lng = parseFloat(lngInput.value);
 
@@ -292,7 +315,6 @@ async function runMobileScore(): Promise<void> {
       presetHint.textContent = '花火大会を選ぶと使えます';
       presetHint.classList.remove('hidden');
       presetSelect.style.borderColor = 'var(--yellow)';
-      // プルダウンを選択したらヒントとハイライトを消す
       presetSelect.addEventListener('change', () => {
         presetHint.classList.add('hidden');
         presetSelect.style.borderColor = '';
@@ -311,11 +333,10 @@ async function runMobileScore(): Promise<void> {
 
   try {
     const pos = await getCurrentPosition();
-    await scoreFromLocation(pos.coords.latitude, pos.coords.longitude);
+    placePinAndShowActions(pos.coords.latitude, pos.coords.longitude);
   } catch (err) {
     console.error('GPS failed:', err);
     // GPS失敗 → 地図タップモードに切り替え
-    mobileManualMode = true;
     if (scoreHereBtn) {
       scoreHereBtn.disabled = false;
       scoreHereBtn.textContent = 'ここから見える？';
@@ -325,23 +346,46 @@ async function runMobileScore(): Promise<void> {
   }
 }
 
+/** ピンを設置し、確認用アクションボタンを表示する */
+function placePinAndShowActions(viewerLat: number, viewerLng: number): void {
+  pendingViewerLat = viewerLat;
+  pendingViewerLng = viewerLng;
+  setViewerMarker(viewerLat, viewerLng);
+  // ピン設置後に両ピンが見えるようフィット（アクションボタン分のpadding）
+  fitToLaunchAndViewer(140);
+  editorHint.classList.add('hidden');
+  showPinActions();
+}
+
+function showPinActions(): void {
+  if (scoreHereBtn) scoreHereBtn.classList.add('hidden');
+  if (mobilePinActions) mobilePinActions.classList.remove('hidden');
+}
+
+function hidePinActions(): void {
+  if (mobilePinActions) mobilePinActions.classList.add('hidden');
+}
+
+function clearPendingPin(): void {
+  pendingViewerLat = null;
+  pendingViewerLng = null;
+  clearViewerMarker();
+  hidePinActions();
+  if (scoreHereBtn) scoreHereBtn.classList.remove('hidden');
+}
+
 async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<void> {
   const lat = parseFloat(latInput.value);
   const lng = parseFloat(lngInput.value);
 
-  if (scoreHereBtn) {
-    scoreHereBtn.disabled = true;
-    scoreHereBtn.textContent = '調べています…';
-  }
+  isAnalyzing = true;
   const loadingTextEl = document.getElementById('loading-text');
   if (loadingTextEl) loadingTextEl.textContent = '計算中…';
   if (loadingEl) loadingEl.classList.remove('hidden');
   editorHint.classList.add('hidden');
-  mobileManualMode = false;
 
   try {
     setViewerMarker(viewerLat, viewerLng);
-    fitToLaunchAndViewer();
 
     const response = await scorePoint({
       launchSite: { lat, lng },
@@ -350,16 +394,18 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
     });
 
     showMobileScoreCard(response);
+    // カード表示後にピンが隠れないよう、ボトムシートの高さ分を考慮してフィット
+    const cardHeight = mobileScoreCard?.offsetHeight ?? 0;
+    fitToLaunchAndViewer(cardHeight + 40);
   } catch (err) {
     console.error('Score failed:', err);
     const message = err instanceof Error ? err.message : '不明なエラー';
     alert(`スコア計算に失敗しました: ${message}`);
   } finally {
+    isAnalyzing = false;
     if (loadingEl) loadingEl.classList.add('hidden');
-    if (scoreHereBtn) {
-      scoreHereBtn.disabled = false;
-      scoreHereBtn.textContent = 'ここから見える？';
-    }
+    pendingViewerLat = null;
+    pendingViewerLng = null;
   }
 }
 
@@ -435,8 +481,9 @@ function showMobileScoreCard(response: ScorePointResponse): void {
   mobileScoreCard.classList.remove('minimized');
   mobileScoreCard.style.transform = '';
   bsMinimized = false;
-  // カード表示中はフローティングボタンを隠す
+  // カード表示中はフローティングボタンとピンアクションを隠す
   if (scoreHereBtn) scoreHereBtn.classList.add('hidden');
+  hidePinActions();
 }
 
 /** カードを閉じてフローティングボタンを復帰 */
@@ -445,6 +492,7 @@ function closeScoreCard(): void {
   mobileScoreCard.classList.add('hidden');
   mobileScoreCard.style.transform = '';
   bsMinimized = false;
+  hidePinActions();
   if (scoreHereBtn) scoreHereBtn.classList.remove('hidden');
 }
 
@@ -508,7 +556,7 @@ presetSelect.addEventListener('change', () => {
   setLaunchSite(lat, lng);
   if (isMobile) {
     mobileScoreCard?.classList.add('hidden');
-    clearViewerMarker();
+    clearPendingPin();
     // タップでもスコア確認できることを案内
     editorHint.classList.remove('hidden');
     editorHintText.textContent = '地図タップで見え方を確認';
@@ -522,8 +570,8 @@ initMap('map', (lat, lng) => {
     const launchLng = parseFloat(lngInput.value);
     if (isNaN(launchLat) || isNaN(launchLng)) return;
 
-    // 地図タップで再計算
-    scoreFromLocation(lat, lng);
+    // 地図タップでピン設置（APIはまだ叩かない）
+    placePinAndShowActions(lat, lng);
     return;
   }
   presetSelect.value = '';

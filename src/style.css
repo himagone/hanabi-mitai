@@ -730,6 +730,51 @@ body {
   border-color: var(--accent);
 }
 
+/* Mobile: pin action buttons (shown after map tap, before API call) */
+#mobile-pin-actions {
+  position: absolute;
+  bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  gap: 10px;
+  animation: fade-in 0.2s ease-out;
+}
+
+#mobile-pin-actions button {
+  padding: 14px 20px;
+  min-height: 48px;
+  border: none;
+  border-radius: 24px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s, transform 0.1s;
+}
+
+#pin-analyze-btn {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+#pin-analyze-btn:active {
+  transform: scale(0.97);
+}
+
+#pin-retry-btn {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border) !important;
+}
+
+#pin-retry-btn:active {
+  background: var(--bg-elevated);
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   #controls {

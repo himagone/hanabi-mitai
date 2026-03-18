@@ -739,12 +739,15 @@ export function setViewerMarker(lat: number, lng: number, label?: string): void 
     .addTo(map);
 }
 
-export function fitToLaunchAndViewer(): void {
+export function fitToLaunchAndViewer(bottomPadding?: number): void {
   if (!map || !launchMarker || !viewerMarker) return;
   const bounds = new maplibregl.LngLatBounds();
   bounds.extend(launchMarker.getLngLat());
   bounds.extend(viewerMarker.getLngLat());
-  map.fitBounds(bounds, { padding: 80, maxZoom: 15 });
+  const pad = bottomPadding
+    ? { top: 80, left: 80, right: 80, bottom: bottomPadding }
+    : 80;
+  map.fitBounds(bounds, { padding: pad, maxZoom: 15 });
 }
 
 export function clearViewerMarker(): void {
