@@ -70,11 +70,17 @@ export function initMap(
     initLayers();
     map!.resize();
 
-    // スプラッシュをフェードアウト
+    // スプラッシュ：地図ロード完了 & 花火3発完了の両方を待つ
     const splash = document.getElementById('splash');
     if (splash) {
-      splash.classList.add('fade-out');
-      splash.addEventListener('transitionend', () => splash.remove());
+      const dismiss = () => {
+        splash.classList.add('fade-out');
+        splash.addEventListener('transitionend', () => splash.remove());
+      };
+      // 3発目の花火完了 = 1.85s(delay) + 0.9s(duration) ≈ 2.8s
+      const elapsed = performance.now();
+      const remaining = Math.max(0, 2800 - elapsed);
+      setTimeout(dismiss, remaining);
     }
   });
 
