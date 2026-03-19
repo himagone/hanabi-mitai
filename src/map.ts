@@ -572,7 +572,7 @@ export function setLaunchMarker(lat: number, lng: number): void {
   if (launchMarker) launchMarker.remove();
 
   const el = document.createElement('div');
-  el.innerHTML = `<svg width="30" height="42" viewBox="0 0 30 42">
+  el.innerHTML = `<svg width="34" height="46" viewBox="-2 -2 34 46" overflow="visible">
     <path d="M15 0C6.7 0 0 6.7 0 15c0 11.2 15 27 15 27s15-15.8 15-27C30 6.7 23.3 0 15 0z" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
     <text x="15" y="20" text-anchor="middle" fill="#070c23" font-size="16" font-weight="bold">✦</text>
   </svg>`;
