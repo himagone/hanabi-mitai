@@ -115,8 +115,12 @@
         <span id="editor-hint-text"></span>
       </div>
       <div id="loading" class="hidden">
-        <div class="spinner"></div>
-        <p id="loading-text">分析中…</p>
+        <div class="loading-animation">
+          <div class="loading-chars" id="loading-text">
+            <span style="--i:0">分</span><span style="--i:1">析</span><span style="--i:2">中</span><span class="loading-dots"><span style="--i:3">.</span><span style="--i:4">.</span><span style="--i:5">.</span></span>
+          </div>
+          <div class="loading-line"></div>
+        </div>
         <div class="loading-steps desktop-only" id="loading-steps">
           <div class="loading-step" data-step="grid"><span class="step-icon">○</span>周辺調査</div>
           <div class="loading-step" data-step="elevation"><span class="step-icon">○</span>地形解析</div>

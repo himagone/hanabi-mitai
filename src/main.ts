@@ -36,6 +36,17 @@ const resultsListEl = document.getElementById('results-list') as HTMLElement;
 const editorHint = document.getElementById('editor-hint') as HTMLElement;
 const editorHintText = document.getElementById('editor-hint-text') as HTMLElement;
 
+function setLoadingText(text: string): void {
+  const el = document.getElementById('loading-text');
+  if (!el) return;
+  const chars = text.split('').map((c, i) =>
+    `<span style="--i:${i}">${c}</span>`
+  ).join('');
+  const dotStart = text.length;
+  const dots = `<span class="loading-dots"><span style="--i:${dotStart}">.</span><span style="--i:${dotStart + 1}">.</span><span style="--i:${dotStart + 2}">.</span></span>`;
+  el.innerHTML = chars + dots;
+}
+
 // Desktop only
 const drawRectBtn = document.getElementById('draw-rect-btn') as HTMLButtonElement | null;
 const undoExclusionBtn = document.getElementById('undo-exclusion-btn') as HTMLButtonElement | null;
@@ -141,8 +152,7 @@ async function runDesktopAnalysis(): Promise<void> {
 
   isAnalyzing = true;
   analyzeBtn.disabled = true;
-  const loadingTextEl = document.getElementById('loading-text');
-  if (loadingTextEl) loadingTextEl.textContent = '分析中…';
+  setLoadingText('分析中');
   loadingEl.classList.remove('hidden');
   resultsEl.classList.add('hidden');
   clearResults();
@@ -379,8 +389,7 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
   const lng = parseFloat(lngInput.value);
 
   isAnalyzing = true;
-  const loadingTextEl = document.getElementById('loading-text');
-  if (loadingTextEl) loadingTextEl.textContent = '計算中…';
+  setLoadingText('計算中');
   if (loadingEl) loadingEl.classList.remove('hidden');
   editorHint.classList.add('hidden');
 

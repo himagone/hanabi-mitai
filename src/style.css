@@ -266,8 +266,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(7, 12, 35, 0.8);
-  backdrop-filter: blur(6px);
+  background: rgba(7, 12, 35, 0.85);
+  backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -275,16 +275,75 @@ body {
   z-index: 10;
 }
 
-#loading p {
-  margin-top: 16px;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-  letter-spacing: 0.04em;
+.loading-animation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
+/* 一文字ずつ浮かび上がるテキスト */
+.loading-chars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+}
+
+.loading-chars > span,
+.loading-dots > span {
+  display: inline-block;
+  opacity: 0;
+  animation: charFloat 2.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.15s);
+}
+
+@keyframes charFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(4px);
+  }
+  15%, 60% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  80%, 100% {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(2px);
+  }
+}
+
+.loading-dots {
+  display: inline-flex;
+  gap: 0;
+}
+
+/* 下線アニメーション */
+.loading-line {
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius: 1px;
+  animation: lineExpand 2.4s ease-in-out infinite;
+}
+
+@keyframes lineExpand {
+  0% { width: 0; opacity: 0; }
+  20% { width: 60%; opacity: 1; }
+  50% { width: 100%; opacity: 1; }
+  80% { width: 60%; opacity: 0.5; }
+  100% { width: 0; opacity: 0; }
+}
+
+/* ステップ表示 */
 .loading-steps {
-  margin-top: 14px;
+  margin-top: 20px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -312,19 +371,6 @@ body {
   text-align: center;
   flex-shrink: 0;
   font-size: 0.7rem;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid rgba(139, 179, 228, 0.15);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .hidden {
