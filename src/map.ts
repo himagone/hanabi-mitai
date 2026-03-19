@@ -572,15 +572,15 @@ export function setLaunchMarker(lat: number, lng: number): void {
   if (launchMarker) launchMarker.remove();
 
   const el = document.createElement('div');
-  el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
-    <circle cx="16" cy="16" r="14" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
-    <text x="16" y="21" text-anchor="middle" fill="#070c23" font-size="16" font-weight="bold">*</text>
+  el.innerHTML = `<svg width="30" height="42" viewBox="0 0 30 42">
+    <path d="M15 0C6.7 0 0 6.7 0 15c0 11.2 15 27 15 27s15-15.8 15-27C30 6.7 23.3 0 15 0z" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
+    <text x="15" y="20" text-anchor="middle" fill="#070c23" font-size="16" font-weight="bold">✦</text>
   </svg>`;
 
-  launchMarker = new maplibregl.Marker({ element: el })
+  launchMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
     .setLngLat([lng, lat])
     .setPopup(
-      new maplibregl.Popup({ offset: 20 }).setHTML(
+      new maplibregl.Popup({ offset: 25 }).setHTML(
         `<div class="popup-title">打上地点</div>
          <div class="popup-detail">${lat.toFixed(4)}, ${lng.toFixed(4)}</div>`,
       ),
@@ -681,13 +681,13 @@ export function renderResults(response: AnalyzeResponse): void {
     const p = top[i];
     const color = scoreColor(p.score.total);
     const el = document.createElement('div');
-    el.innerHTML = `<svg width="28" height="28" viewBox="0 0 28 28">
-      <circle cx="14" cy="14" r="12" fill="${color}" stroke="#fff" stroke-width="2"/>
+    el.innerHTML = `<svg width="28" height="40" viewBox="0 0 28 40">
+      <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.3 21.7 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/>
       <text x="14" y="18" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">${i + 1}</text>
     </svg>`;
     el.style.cursor = 'pointer';
 
-    const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
+    const popup = new maplibregl.Popup({ offset: 24 }).setHTML(
       `<div class="popup-title">#${i + 1} — ${(p.score.total * 100).toFixed(0)}点</div>
        <div class="popup-detail">
          ${p.distanceMeters}m / ${p.viewingAngleDeg}°<br>
@@ -696,7 +696,7 @@ export function renderResults(response: AnalyzeResponse): void {
        </div>`,
     );
 
-    const marker = new maplibregl.Marker({ element: el })
+    const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
       .setLngLat([p.lng, p.lat])
       .setPopup(popup)
       .addTo(map);
@@ -723,15 +723,15 @@ export function setViewerMarker(lat: number, lng: number, label?: string): void 
   if (viewerMarker) viewerMarker.remove();
 
   const el = document.createElement('div');
-  el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32">
-    <circle cx="16" cy="16" r="14" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
-    <circle cx="16" cy="16" r="5" fill="#fff"/>
+  el.innerHTML = `<svg width="30" height="42" viewBox="0 0 30 42">
+    <path d="M15 0C6.7 0 0 6.7 0 15c0 11.2 15 27 15 27s15-15.8 15-27C30 6.7 23.3 0 15 0z" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
+    <circle cx="15" cy="15" r="5" fill="#fff"/>
   </svg>`;
 
-  viewerMarker = new maplibregl.Marker({ element: el })
+  viewerMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
     .setLngLat([lng, lat])
     .setPopup(
-      new maplibregl.Popup({ offset: 20 }).setHTML(
+      new maplibregl.Popup({ offset: 25 }).setHTML(
         `<div class="popup-title">現在地</div>
          <div class="popup-detail">${label || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}</div>`,
       ),
