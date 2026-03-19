@@ -69,6 +69,13 @@ export function initMap(
   map.on('load', () => {
     initLayers();
     map!.resize();
+
+    // スプラッシュをフェードアウト
+    const splash = document.getElementById('splash');
+    if (splash) {
+      splash.classList.add('fade-out');
+      splash.addEventListener('transitionend', () => splash.remove());
+    }
   });
 
   // フォント・スタイル適用完了後にコンテナサイズを再計測

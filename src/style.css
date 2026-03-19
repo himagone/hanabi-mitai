@@ -6,6 +6,151 @@
   box-sizing: border-box;
 }
 
+/* ===== Splash screen — firework animation ===== */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #070c23;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: opacity 0.6s ease;
+}
+
+#splash.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-title {
+  position: absolute;
+  bottom: 38%;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #fff;
+  opacity: 0;
+  animation: splashTitleIn 0.8s 1.6s ease forwards;
+}
+
+@keyframes splashTitleIn {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Firework container */
+.firework {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+}
+
+.firework-1 { left: 50%; top: 45%; }
+.firework-2 { left: 32%; top: 38%; }
+.firework-3 { left: 68%; top: 42%; }
+
+/* Trail — the rising line */
+.firework-trail {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 2px;
+  height: 0;
+  transform: translateX(-50%);
+  background: linear-gradient(to top, transparent, #fbbf24);
+  border-radius: 1px;
+  opacity: 0;
+}
+
+.firework-1 .firework-trail {
+  animation: trailRise 0.7s 0.2s ease-out forwards;
+}
+.firework-2 .firework-trail {
+  animation: trailRise 0.7s 0.8s ease-out forwards;
+}
+.firework-3 .firework-trail {
+  animation: trailRise 0.7s 1.2s ease-out forwards;
+}
+
+@keyframes trailRise {
+  0%   { height: 0; opacity: 1; }
+  70%  { height: 80px; opacity: 1; }
+  100% { height: 80px; opacity: 0; }
+}
+
+/* Burst — sparks flying outward */
+.firework-burst {
+  position: absolute;
+  top: -80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+}
+
+.firework-burst span {
+  position: absolute;
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+/* Spark directions — 12 directions × 30deg each */
+.firework-burst span:nth-child(1)  { --dx: 0;     --dy: -1;    }
+.firework-burst span:nth-child(2)  { --dx: 0.5;   --dy: -0.87; }
+.firework-burst span:nth-child(3)  { --dx: 0.87;  --dy: -0.5;  }
+.firework-burst span:nth-child(4)  { --dx: 1;     --dy: 0;     }
+.firework-burst span:nth-child(5)  { --dx: 0.87;  --dy: 0.5;   }
+.firework-burst span:nth-child(6)  { --dx: 0.5;   --dy: 0.87;  }
+.firework-burst span:nth-child(7)  { --dx: 0;     --dy: 1;     }
+.firework-burst span:nth-child(8)  { --dx: -0.5;  --dy: 0.87;  }
+.firework-burst span:nth-child(9)  { --dx: -0.87; --dy: 0.5;   }
+.firework-burst span:nth-child(10) { --dx: -1;    --dy: 0;     }
+.firework-burst span:nth-child(11) { --dx: -0.87; --dy: -0.5;  }
+.firework-burst span:nth-child(12) { --dx: -0.5;  --dy: -0.87; }
+
+/* Firework 1 — gold/warm */
+.firework-1 .firework-burst span {
+  background: #fbbf24;
+  box-shadow: 0 0 6px 2px rgba(251, 191, 36, 0.6);
+  animation: sparkBurst 0.9s 0.85s ease-out forwards;
+}
+
+/* Firework 2 — blue/accent */
+.firework-2 .firework-burst span {
+  background: #8bb3e4;
+  box-shadow: 0 0 6px 2px rgba(139, 179, 228, 0.6);
+  animation: sparkBurst 0.9s 1.45s ease-out forwards;
+}
+
+/* Firework 3 — green */
+.firework-3 .firework-burst span {
+  background: #6ee7a0;
+  box-shadow: 0 0 6px 2px rgba(110, 231, 160, 0.6);
+  animation: sparkBurst 0.9s 1.85s ease-out forwards;
+}
+
+@keyframes sparkBurst {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(
+      calc(var(--dx) * 50px),
+      calc(var(--dy) * 50px + 15px)
+    ) scale(0);
+    opacity: 0;
+  }
+}
+
 :root {
   --bg-primary: #070c23;
   --bg-secondary: #0e1430;
@@ -324,22 +469,6 @@ body {
   gap: 0;
 }
 
-/* 下線アニメーション */
-.loading-line {
-  width: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  border-radius: 1px;
-  animation: lineExpand 2.4s ease-in-out infinite;
-}
-
-@keyframes lineExpand {
-  0% { width: 0; opacity: 0; }
-  20% { width: 60%; opacity: 1; }
-  50% { width: 100%; opacity: 1; }
-  80% { width: 60%; opacity: 0.5; }
-  100% { width: 0; opacity: 0; }
-}
 
 /* ステップ表示 */
 .loading-steps {
