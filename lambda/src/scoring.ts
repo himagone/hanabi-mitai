@@ -130,59 +130,6 @@ function slopeScore(
   return 0.5 + 0.5 * Math.max(-1, Math.min(1, normalizedDot));
 }
 
-/**
- * おすすめ理由を生成
- */
-function generateReason(
-  scores: ScoreBreakdown,
-  relativeElevation: number,
-  distanceMeters: number,
-  viewingAngleDeg: number,
-): string {
-  const reasons: string[] = [];
-
-  // 距離が遠すぎる場合
-  if (scores.distance < 0.05) {
-    return '遠すぎて視認困難';
-  }
-  if (scores.distance < 0.3) {
-    reasons.push('距離が遠い');
-  }
-
-  if (scores.accessibility >= 0.9) {
-    reasons.push('公園・広場');
-  } else if (scores.accessibility <= 0.2) {
-    reasons.push('住宅地');
-  }
-
-  if (scores.lineOfSight < 0) {
-    reasons.push('周辺データ不足');
-  } else if (scores.lineOfSight >= 0.9) {
-    reasons.push('視界が開けている');
-  } else if (scores.lineOfSight >= 0.5) {
-    reasons.push('一部障害物あり');
-  } else if (scores.lineOfSight < 0.3) {
-    reasons.push('建物が視界を遮る');
-  }
-
-  if (viewingAngleDeg >= 25 && viewingAngleDeg <= 45) {
-    reasons.push('見上げやすい');
-  } else if (viewingAngleDeg >= 10 && viewingAngleDeg < 25) {
-    reasons.push('正面に見える');
-  }
-
-  if (relativeElevation > 10) {
-    reasons.push(`+${Math.round(relativeElevation)}m`);
-  } else if (relativeElevation > 3) {
-    reasons.push('やや高台');
-  }
-
-  if (scores.slope > 0.7) {
-    reasons.push('開けた方角');
-  }
-
-  return reasons.length > 0 ? reasons.join('、') : '';
-}
 
 /**
  * パス1: 高速な事前スコア（ネットワーク不要）
@@ -286,6 +233,5 @@ export async function fullScorePoint(
     relativeElevation: Math.round(relElev * 10) / 10,
     viewingAngleDeg: Math.round(angleDeg * 10) / 10,
     score: scores,
-    reason: generateReason(scores, relElev, dist, angleDeg),
   };
 }

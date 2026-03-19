@@ -35,7 +35,6 @@ export interface ScoredPoint {
   relativeElevation: number;
   viewingAngleDeg: number;
   score: ScoreBreakdown;
-  reason: string;
 }
 
 /** 分析レスポンス */

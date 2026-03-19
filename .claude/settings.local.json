@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npx tsc:*)",
       "WebFetch(domain:www.norikura-hanabi.com)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(git:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

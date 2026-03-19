@@ -448,11 +448,6 @@ body {
   line-height: 1.4;
 }
 
-.result-card .reason {
-  margin-top: 3px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
 
 /* Score bar */
 .score-bar {
@@ -654,13 +649,6 @@ body {
 .score-badge.fair { background: rgba(251, 191, 36, 0.15); color: var(--yellow); }
 .score-badge.poor { background: rgba(248, 113, 113, 0.15); color: var(--red); }
 
-.score-reason {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  padding: 0 4px;
-  margin-bottom: 10px;
-  line-height: 1.4;
-}
 
 .score-card-details {
   display: flex;

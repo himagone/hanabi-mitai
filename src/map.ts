@@ -663,7 +663,6 @@ export function renderResults(response: AnalyzeResponse): void {
          <div class="popup-detail">
            ${p.distance}m / ${p.viewingAngle}°<br>
            ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m / 視線${(p.scoreLOS * 100).toFixed(0)}%<br>
-           ${p.reason}
          </div>`,
       )
       .addTo(map!);
@@ -692,7 +691,6 @@ export function renderResults(response: AnalyzeResponse): void {
        <div class="popup-detail">
          ${p.distanceMeters}m / ${p.viewingAngleDeg}°<br>
          ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m / 視線${(p.score.lineOfSight * 100).toFixed(0)}%<br>
-         ${p.reason}
        </div>`,
     );
 
@@ -723,7 +721,7 @@ export function setViewerMarker(lat: number, lng: number, label?: string): void 
   if (viewerMarker) viewerMarker.remove();
 
   const el = document.createElement('div');
-  el.innerHTML = `<svg width="30" height="42" viewBox="0 0 30 42">
+  el.innerHTML = `<svg width="34" height="46" viewBox="-2 -2 34 46" overflow="visible">
     <path d="M15 0C6.7 0 0 6.7 0 15c0 11.2 15 27 15 27s15-15.8 15-27C30 6.7 23.3 0 15 0z" fill="#8bb3e4" stroke="#fff" stroke-width="2"/>
     <circle cx="15" cy="15" r="5" fill="#fff"/>
   </svg>`;

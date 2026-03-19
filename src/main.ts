@@ -242,7 +242,6 @@ function showDesktopResults(response: AnalyzeResponse): void {
       <div class="details">
         打上げまで ${distanceWithWalk(p.distanceMeters)}
       </div>
-      <div class="reason">${p.reason}</div>
       <div class="score-bar">
         <div class="segment" style="flex:${p.score.viewingAngle};background:#3b82f6;" title="角度"></div>
         <div class="segment" style="flex:${p.score.lineOfSight};background:#22c55e;" title="視界"></div>
@@ -441,9 +440,6 @@ function showMobileScoreCard(response: ScorePointResponse): void {
     if (badge) { badge.textContent = '見えない'; badge.className = 'score-badge poor'; }
   }
 
-  // Reason (prominent, right below score)
-  const reasonEl = document.getElementById('sc-reason');
-  if (reasonEl) reasonEl.textContent = v.reason;
 
   // Details: human-friendly labels + values
   const distEl = document.getElementById('sc-distance');
