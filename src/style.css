@@ -368,6 +368,32 @@ body {
   border-color: var(--red);
 }
 
+.btn-tool.btn-small-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: all 0.2s;
+}
+
+.btn-tool.btn-small-link:hover {
+  color: var(--text-primary);
+}
+
+.btn-tool.btn-small-link.active {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  text-decoration: none;
+}
+
 /* Editor hint */
 #editor-hint {
   position: absolute;

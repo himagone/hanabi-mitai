@@ -5,7 +5,8 @@
       "WebFetch(domain:www.norikura-hanabi.com)",
       "Bash(npm run:*)",
       "Bash(git:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "WebFetch(domain:yui540.com)"
     ]
   }
 }

@@ -51,6 +51,9 @@ function setLoadingText(text: string): void {
 const drawRectBtn = document.getElementById('draw-rect-btn') as HTMLButtonElement | null;
 const undoExclusionBtn = document.getElementById('undo-exclusion-btn') as HTMLButtonElement | null;
 const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTMLButtonElement | null;
+const editLaunchBtn = document.getElementById('edit-launch-btn') as HTMLButtonElement | null;
+
+let isEditingLaunchSite = false;
 
 // Mobile only
 const scoreHereBtn = document.getElementById('score-here-btn') as HTMLButtonElement | null;
@@ -101,13 +104,18 @@ if (!isMobile) {
         editorHintText.textContent = 'ドラッグで頂点移動 \u00B7 辺の中点ドラッグで追加 \u00B7 Delete 削除 \u00B7 Esc 選択解除';
         break;
       default:
-        editorHint.classList.add('hidden');
+        if (!isEditingLaunchSite) {
+          editorHint.classList.add('hidden');
+        }
     }
   }
 
   onStateChange(updateUI);
 
   drawRectBtn?.addEventListener('click', () => {
+    // 打上地点編集モードを解除
+    isEditingLaunchSite = false;
+    editLaunchBtn?.classList.remove('active');
     if (getEditorMode() === 'drawing-rect') {
       cancelDrawing();
     } else {
@@ -126,6 +134,18 @@ if (!isMobile) {
   });
 
   analyzeBtn.addEventListener('click', runDesktopAnalysis);
+
+  // 打上地点編集モード
+  editLaunchBtn?.addEventListener('click', () => {
+    isEditingLaunchSite = !isEditingLaunchSite;
+    editLaunchBtn.classList.toggle('active', isEditingLaunchSite);
+    if (isEditingLaunchSite) {
+      editorHint.classList.remove('hidden');
+      editorHintText.textContent = '地図をクリックして打上地点を指定 · もう一度押して終了';
+    } else {
+      editorHint.classList.add('hidden');
+    }
+  });
 
   [latInput, lngInput].forEach((input) => {
     input.addEventListener('keydown', (e) => {
@@ -581,6 +601,12 @@ initMap('map', (lat, lng) => {
     placePinAndShowActions(lat, lng);
     return;
   }
+  // デスクトップ: 編集モード時のみ打上地点を変更
+  if (!isEditingLaunchSite) return;
   presetSelect.value = '';
   setLaunchSite(lat, lng);
+  // 設置後は編集モードを解除
+  isEditingLaunchSite = false;
+  editLaunchBtn?.classList.remove('active');
+  editorHint.classList.add('hidden');
 });
