@@ -7,7 +7,10 @@
     "build": "esbuild src/handler.ts --bundle --platform=node --target=node20 --outfile=dist/handler.mjs --format=esm '--external:@aws-sdk/*'",
     "dev": "tsx src/local-server.ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@mapbox/vector-tile": "^3.0.0",
+    "pbf": "^5.0.0"
+  },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",
     "@types/node": "^22.0.0",

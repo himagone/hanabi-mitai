@@ -1,9 +1,15 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse, GridPoint, GeoJSON } from './types.js';
-import { generateGrid, filterExclusionZones } from './grid.js';
+import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse, GridPoint, ScoredPoint, GeoJSON } from './types.js';
+import { generateGrid, filterExclusionZones, haversineDistance } from './grid.js';
+
+/** 打上地点まわりの立入禁止（保安）半径。開花直径相当、最低150m */
+function safetyRadiusMeters(fireworkDiameter: number | undefined): number {
+  return Math.max(fireworkDiameter ?? 150, 150);
+}
 import { getElevationBatch, getElevation } from './elevation.js';
 import { quickScorePoint, fullScorePoint } from './scoring.js';
-import { fetchLandUseAndBuildings, fetchBuildingsForLOS } from './accessibility.js';
+import { fetchLandUseAndBuildings, fetchBuildingsForLOS, clearLandUseCache } from './accessibility.js';
+import { fetchPlateauBuildings, fetchPlateauBuildingsCorridor, getCachedPlateauBuildings } from './plateau.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -26,8 +32,12 @@ function errorResponse(statusCode: number, message: string): APIGatewayProxyResu
 async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const { launchSite, radiusMeters, fireworkDiameter } = request;
 
-  // グリッド間隔をエリアサイズに応じて調整
-  const spacing = radiusMeters <= 1000 ? 40 : radiusMeters <= 2000 ? 50 : 70;
+  // グリッド間隔をエリアサイズに応じて調整（採点メッシュの粒度）
+  // 細かいほど良いが、返却 GeoJSON が Lambda の 6MB 応答上限を超えないよう半径で段階調整
+  const spacing =
+    radiusMeters <= 1000 ? 20 :
+    radiusMeters <= 1500 ? 25 :
+    radiusMeters <= 2000 ? 30 : 45;
 
   // 1. グリッド生成
   let gridLatLngs = generateGrid(launchSite, radiusMeters, spacing);
@@ -38,12 +48,24 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     gridLatLngs = filterExclusionZones(gridLatLngs, exclusionZones);
   }
 
-  // 2. OSM データ取得と標高取得を並列実行
+  // 1.6. 打上まわりの立入禁止（保安）圏内は採点対象外（絶対に立入禁止のため常に除外）
+  const safetyRadius = safetyRadiusMeters(fireworkDiameter);
+  gridLatLngs = gridLatLngs.filter((p) => haversineDistance(p, launchSite) >= safetyRadius);
+
+  // 2. PLATEAU 建物と標高を並列取得
   const allPoints = [launchSite, ...gridLatLngs];
   const [, elevations] = await Promise.all([
-    fetchLandUseAndBuildings(launchSite, radiusMeters),
+    fetchPlateauBuildings(launchSite, radiusMeters),
     getElevationBatch(allPoints),
   ]);
+
+  // 2.5. 建物は PLATEAU 優先。圏外(null)のときのみ OSM で建物＋土地利用を取得する。
+  //      Tokyo(PLATEAU圏内) は Overpass 不要で高速。
+  if (getCachedPlateauBuildings() === null) {
+    await fetchLandUseAndBuildings(launchSite, radiusMeters);
+  } else {
+    clearLandUseCache(); // 場所スコアは「不明(0.9)」に（PLATEAU圏内は土地利用を引かない）
+  }
 
   const launchSiteElevation = elevations[0] ?? 0;
 
@@ -60,46 +82,42 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     }
   }
 
-  // 4. パス1: 高速な事前スコアリング（CPU のみ、ネットワーク不要）
-  const quickResults = gridPoints.map((point, idx) => ({
-    idx,
+  // 4. パス1: スコア上限値でソート（分枝限定法）
+  //    未計算の勾配・遮蔽を満点と仮定した上限値。遮蔽の良い地点も上位に来る。
+  const ranked = gridPoints.map((point) => ({
     point,
     ...quickScorePoint(point, launchSite, launchSiteElevation, fireworkDiameter),
   }));
+  ranked.sort((a, b) => b.quickScoreUB - a.quickScoreUB);
 
-  // 事前スコアでソートし、上位候補を抽出
-  quickResults.sort((a, b) => b.quickScore - a.quickScore);
-  const TOP_N = 100;
-  const candidates = quickResults.slice(0, TOP_N);
-  const rest = quickResults.slice(TOP_N);
+  // 5. パス2: 上限値の降順に本採点し、上限が現時点の上位K件の real を
+  //    下回った時点で打ち切る（real ≤ 上限 が常に成立するため取りこぼしゼロ）
+  const RESULT_K = 10;
+  const scored: ScoredPoint[] = [];
+  const topReals: number[] = []; // real total の上位K件（降順）
+  let kthBestReal = -Infinity;
 
-  // 5. パス2: 上位候補の勾配用のタイルを事前取得
-  // (LOS は建物ポリゴン交差ベースのため事前サンプリング不要)
-  const prefetchPoints: import('./types.js').LatLng[] = [];
-  const SLOPE_DELTA = 0.0003;
+  for (const candidate of ranked) {
+    if (scored.length >= RESULT_K && candidate.quickScoreUB <= kthBestReal) break;
 
-  for (const c of candidates) {
-    const p = c.point;
-    // 勾配の隣接点
-    prefetchPoints.push(
-      { lat: p.lat + SLOPE_DELTA, lng: p.lng },
-      { lat: p.lat - SLOPE_DELTA, lng: p.lng },
-      { lat: p.lat, lng: p.lng + SLOPE_DELTA },
-      { lat: p.lat, lng: p.lng - SLOPE_DELTA },
-    );
+    const sp = await fullScorePoint(candidate.point, launchSite, launchSiteElevation, fireworkDiameter);
+    scored.push(sp);
+
+    // 上位K件の real を維持
+    const total = sp.score.total;
+    let inserted = false;
+    for (let j = 0; j < topReals.length; j++) {
+      if (total > topReals[j]) { topReals.splice(j, 0, total); inserted = true; break; }
+    }
+    if (!inserted) topReals.push(total);
+    if (topReals.length > RESULT_K) topReals.length = RESULT_K;
+    if (topReals.length >= RESULT_K) kthBestReal = topReals[RESULT_K - 1];
   }
-  await getElevationBatch(prefetchPoints);
 
-  // フルスコアリング（タイルはキャッシュ済みなので高速）
-  const scoredTop = await Promise.all(
-    candidates.map((c) => fullScorePoint(c.point, launchSite, launchSiteElevation, fireworkDiameter)),
-  );
+  const topPositions = [...scored].sort((a, b) => b.score.total - a.score.total).slice(0, 10);
 
-  scoredTop.sort((a, b) => b.score.total - a.score.total);
-
-  // 6. GeoJSON 生成（全点のヒートマップ用 + トップ10の詳細）
-  // 上位候補: フルスコア
-  const topFeatures: GeoJSON.Feature[] = scoredTop.map((p) => ({
+  // 6. GeoJSON 生成（本採点=real、未採点=上限値でヒートマップ表示）
+  const scoredFeatures: GeoJSON.Feature[] = scored.map((p) => ({
     type: 'Feature' as const,
     geometry: {
       type: 'Point' as const,
@@ -111,7 +129,6 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
       distance: p.distanceMeters,
       relativeElevation: p.relativeElevation,
       viewingAngle: p.viewingAngleDeg,
-      scoreViewingAngle: Math.round(p.score.viewingAngle * 100) / 100,
       scoreElevation: Math.round(p.score.elevation * 100) / 100,
       scoreLOS: Math.round(p.score.lineOfSight * 100) / 100,
       scoreSlope: Math.round(p.score.slope * 100) / 100,
@@ -119,20 +136,19 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     },
   }));
 
-  // 残り: 概算スコアでヒートマップ表示
-  const restFeatures: GeoJSON.Feature[] = rest.map((r) => ({
+  const unscored = ranked.slice(scored.length);
+  const restFeatures: GeoJSON.Feature[] = unscored.map((r) => ({
     type: 'Feature' as const,
     geometry: {
       type: 'Point' as const,
       coordinates: [r.point.lng, r.point.lat] as [number, number],
     },
     properties: {
-      score: Math.round(r.quickScore * 100) / 100,
+      score: Math.round(r.quickScoreUB * 100) / 100,
       elevation: r.point.elevation,
       distance: Math.round(r.dist),
       relativeElevation: Math.round(r.relElev * 10) / 10,
       viewingAngle: Math.round(r.angleDeg * 10) / 10,
-      scoreViewingAngle: 0,
       scoreElevation: 0,
       scoreLOS: 0,
       scoreSlope: 0,
@@ -144,11 +160,12 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     launchSite,
     launchSiteElevation,
     radiusMeters,
+    safetyRadiusMeters: safetyRadius,
     totalPointsAnalyzed: gridPoints.length,
-    topPositions: scoredTop.slice(0, 10),
+    topPositions,
     geojson: {
       type: 'FeatureCollection',
-      features: [...topFeatures, ...restFeatures],
+      features: [...scoredFeatures, ...restFeatures],
     },
   };
 }
@@ -163,6 +180,12 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
 async function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
   const { launchSite, viewerLocation, fireworkDiameter } = request;
 
+  // 打上まわりの立入禁止（保安）圏内は採点を拒否
+  const safetyRadius = safetyRadiusMeters(fireworkDiameter);
+  if (haversineDistance(viewerLocation, launchSite) < safetyRadius) {
+    throw new Error(`打上地点から${safetyRadius}m以内は立入禁止エリアです`);
+  }
+
   // 勾配用の隣接点
   const SLOPE_DELTA = 0.0003;
   const slopePoints: import('./types.js').LatLng[] = [
@@ -172,12 +195,18 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
     { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
   ];
 
-  // Overpass と標高取得を並列実行
-  const overpassPromise = fetchBuildingsForLOS(viewerLocation, launchSite);
-  const elevationPromise = getElevationBatch([launchSite, viewerLocation, ...slopePoints]);
+  // PLATEAU 建物と標高を並列取得
+  const [, elevations] = await Promise.all([
+    fetchPlateauBuildingsCorridor(viewerLocation, launchSite),
+    getElevationBatch([launchSite, viewerLocation, ...slopePoints]),
+  ]);
 
-  // 両方完了を待つ（Overpass は内部で3秒タイムアウトあり）
-  const [, elevations] = await Promise.all([overpassPromise, elevationPromise]);
+  // 建物は PLATEAU 優先。圏外(null)のときのみ OSM をフォールバック取得
+  if (getCachedPlateauBuildings() === null) {
+    await fetchBuildingsForLOS(viewerLocation, launchSite);
+  } else {
+    clearLandUseCache();
+  }
 
   const launchSiteElevation = elevations[0] ?? 0;
   const viewerElevation = elevations[1];

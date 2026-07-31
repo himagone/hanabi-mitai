@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { handler } from './handler.js';
 
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 const server = createServer(async (req, res) => {
   // CORS

@@ -1,105 +1,166 @@
 import type { LatLng } from './types.js';
 import { getElevation } from './elevation.js';
 import { getCachedBuildings, type BuildingPolygon } from './accessibility.js';
-import { haversineDistance } from './grid.js';
+import { getCachedPlateauBuildings } from './plateau.js';
+import { haversineDistance, samplePointsBetween } from './grid.js';
 
-/** デフォルトの花火開花高度 (m) */
-const DEFAULT_FIREWORK_ALTITUDE = 170;
+/** 地形サンプリング間隔 (m) */
+const TERRAIN_SAMPLE_INTERVAL = 40;
+/**
+ * 視点に近すぎる遮蔽物を無視する距離比の下限。
+ * t→0 で必要視線高さが発散するため 0 割りだけ避ける。目の前の建物こそ最も遮るので
+ * 小さめにして near-field を拾う（地面は視点高付近なので誤遮蔽にはならない）。
+ */
+const MIN_T = 0.003;
+/** 緯度1度あたりのメートル（水平オフセット換算用） */
+const METERS_PER_DEG_LAT = 111320;
 
 /**
- * 視線通過チェック（建物ポリゴン交差判定ベース）
+ * 開花球ディスクのサンプル格子（半径比）。
+ * 横(方位)5 × 縦(高さ)3 のうち、円盤内(u²+v²≤1)のセルのみ可視判定に用いる。
+ */
+const AZIMUTH_OFFSETS = [-0.8, -0.4, 0, 0.4, 0.8];
+const HEIGHT_OFFSETS = [-0.7, 0, 0.7];
+
+/** 視線判定の結果 */
+export interface LineOfSightResult {
+  /** 開花球ディスクのうち遮蔽されずに見えているセルの割合 (0〜1) */
+  fraction: number;
+  /** 建物データ(PLATEAU/OSM)が取得できているか。false のときは地形のみで判定 */
+  buildingsKnown: boolean;
+}
+
+type Buildings = BuildingPolygon[] | null;
+
+/**
+ * 視線通過チェック（開花球ディスクの2D可視率）
  *
- * 観覧地点から花火の開花位置への視線（3D直線）が、
- * OSM建物ポリゴンの辺と交差するかを判定し、
- * 交差点での建物高さと視線高さを比較する。
+ * 花火は縦にも横にも直径Dの広がりを持つ。観覧者に正対する円盤とみなし、
+ * 方位(横)×高さ(縦)の格子で各セルが地形・建物に遮られないかを調べ、見えているセル率を返す。
+ * これにより「完全に見える(1.0)／建物の隙間から見える(0<f<1)／見えない(0)」を表現する。
  *
- * @returns 0.0（遮蔽あり）〜 1.0（遮蔽なし）
+ * 建物は PLATEAU の実測高さを優先し、圏外では OSM 推定高さにフォールバックする。
+ *
+ * @param burstCenterElev 開花中心の絶対標高 (打上標高 + 開花高度)
+ * @param burstRadius     開花半径 (直径/2)
  */
 export async function checkLineOfSight(
   viewer: LatLng,
   viewerElevation: number,
   launchSite: LatLng,
-  launchSiteElevation: number,
-  fireworkAltitude: number = DEFAULT_FIREWORK_ALTITUDE,
-): Promise<number> {
-  const viewerHeight = viewerElevation + 1.5; // 目の高さ
-  const fireworkHeight = launchSiteElevation + fireworkAltitude;
+  burstCenterElev: number,
+  burstRadius: number,
+): Promise<LineOfSightResult> {
+  const plateau = getCachedPlateauBuildings();
+  const osm = getCachedBuildings();
+  const buildings = plateau !== null ? plateau : osm;
+  const buildingsKnown = plateau !== null || osm !== null;
+
   const totalDist = haversineDistance(viewer, launchSite);
+  if (totalDist < 10) return { fraction: 1, buildingsKnown };
 
-  if (totalDist < 10) return 1.0;
+  // 視線方位に直交する水平単位ベクトル（メートル系 → 緯度経度へ換算）
+  const latMid = (viewer.lat + launchSite.lat) / 2;
+  const metersPerDegLng = METERS_PER_DEG_LAT * Math.cos((latMid * Math.PI) / 180);
+  const eastM = (launchSite.lng - viewer.lng) * metersPerDegLng;
+  const northM = (launchSite.lat - viewer.lat) * METERS_PER_DEG_LAT;
+  const len = Math.hypot(eastM, northM);
+  // 直交方向（メートル単位ベクトル）
+  const perpEast = -northM / len;
+  const perpNorth = eastM / len;
 
-  const buildings = getCachedBuildings();
-  if (buildings === null) return -1; // データ未取得
-  if (buildings.length === 0) return 1.0; // 取得済みで建物なし → 見通し良好
-
-  // 視線の2D方向ベクトル (lng, lat)
-  const rayDx = launchSite.lng - viewer.lng;
-  const rayDy = launchSite.lat - viewer.lat;
-
-  // 視線の2Dバウンディングボックス
-  const rayMinLng = Math.min(viewer.lng, launchSite.lng);
-  const rayMaxLng = Math.max(viewer.lng, launchSite.lng);
-  const rayMinLat = Math.min(viewer.lat, launchSite.lat);
-  const rayMaxLat = Math.max(viewer.lat, launchSite.lat);
-
-  // 遮蔽する建物を収集
-  const blockingBuildings: { building: BuildingPolygon; t: number }[] = [];
-
-  for (const building of buildings) {
-    // BBox で高速フィルタ: 視線のBBoxと建物のBBoxが重ならなければスキップ
-    if (building.maxLng < rayMinLng || building.minLng > rayMaxLng ||
-        building.maxLat < rayMinLat || building.minLat > rayMaxLat) {
-      continue;
-    }
-
-    // 建物ポリゴンの各辺と視線の交差判定
-    const intersections = findRayPolygonIntersections(
-      viewer.lng, viewer.lat, rayDx, rayDy,
-      building.coords,
-    );
-
-    for (const t of intersections) {
-      if (t > 0.01 && t < 0.99) { // 始点・終点付近は除外
-        blockingBuildings.push({ building, t });
-      }
-    }
-  }
-
-  if (blockingBuildings.length === 0) return 1.0;
-
-  // 交差する建物について、視線の高さと建物の高さを比較
-  // 建物の地面標高を取得
-  const elevPoints = blockingBuildings.map((b) => ({
-    lat: viewer.lat + (launchSite.lat - viewer.lat) * b.t,
-    lng: viewer.lng + (launchSite.lng - viewer.lng) * b.t,
-  }));
-
-  const elevations = await Promise.all(
-    elevPoints.map((p) => getElevation(p.lat, p.lng)),
+  // 各方位（横オフセット）のレイで、遮蔽越えに必要な最低標高 H_block(u) を求める
+  const blockHeights = await Promise.all(
+    AZIMUTH_OFFSETS.map((u) => {
+      const offMeters = u * burstRadius;
+      const target: LatLng = {
+        lat: launchSite.lat + (perpNorth * offMeters) / METERS_PER_DEG_LAT,
+        lng: launchSite.lng + (perpEast * offMeters) / metersPerDegLng,
+      };
+      return blockHeightAlongRay(viewer, viewerElevation, target, buildings);
+    }),
   );
 
-  let blockedCount = 0;
-
-  for (let i = 0; i < blockingBuildings.length; i++) {
-    const { building, t } = blockingBuildings[i];
-    const groundElev = elevations[i] ?? viewerElevation;
-
-    // 建物の頂上の高さ
-    const buildingTop = groundElev + building.height;
-
-    // 視線の高さ（線形補間）
-    const lineHeight = viewerHeight + (fireworkHeight - viewerHeight) * t;
-
-    if (buildingTop > lineHeight) {
-      blockedCount++;
+  // 円盤内セルの可視判定（cellElev ≥ H_block(u) なら見えている）
+  let total = 0;
+  let visible = 0;
+  for (let i = 0; i < AZIMUTH_OFFSETS.length; i++) {
+    const u = AZIMUTH_OFFSETS[i];
+    const hBlock = blockHeights[i];
+    for (const v of HEIGHT_OFFSETS) {
+      if (u * u + v * v > 1) continue; // 円盤外
+      total++;
+      const cellElev = burstCenterElev + v * burstRadius;
+      if (cellElev >= hBlock) visible++;
     }
   }
 
-  if (blockedCount === 0) return 1.0;
+  return { fraction: total > 0 ? visible / total : 1, buildingsKnown };
+}
 
-  // 1つでも遮蔽があれば大きく減点
-  const blockRatio = blockedCount / blockingBuildings.length;
-  return Math.max(0, 0.2 * (1 - blockRatio));
+/**
+ * 1本のレイ(viewer→target)に沿った遮蔽越えに必要な最低開花標高 H_block を返す。
+ *
+ * 地形サンプルと建物交差から遮蔽点 {t=水平距離比, O=遮蔽物頂上標高} を集め、
+ * 各点を視線が越える条件 H ≥ viewerEye + (O − viewerEye)/t の最大を取る。
+ * 遮蔽が無ければ -Infinity（＝どの高さでも見える）。
+ */
+async function blockHeightAlongRay(
+  viewer: LatLng,
+  viewerElevation: number,
+  target: LatLng,
+  buildings: Buildings,
+): Promise<number> {
+  const viewerEye = viewerElevation + 1.5;
+  const rayDist = haversineDistance(viewer, target);
+  if (rayDist < 1) return -Infinity;
+
+  let hBlock = -Infinity;
+  const consider = (t: number, obstacleElev: number): void => {
+    if (t <= MIN_T) return;
+    const required = viewerEye + (obstacleElev - viewerEye) / t;
+    if (required > hBlock) hBlock = required;
+  };
+
+  // 1. 地形
+  const samples = samplePointsBetween(viewer, target, TERRAIN_SAMPLE_INTERVAL);
+  const groundElevs = await Promise.all(samples.map((s) => getElevation(s.lat, s.lng)));
+  for (let i = 0; i < samples.length; i++) {
+    const ground = groundElevs[i];
+    if (ground === null) continue;
+    consider(haversineDistance(viewer, samples[i]) / rayDist, ground);
+  }
+
+  // 2. 建物: レイと建物ポリゴンの交差点で「地面標高 + 建物高さ」
+  if (buildings !== null && buildings.length > 0) {
+    const rayDx = target.lng - viewer.lng;
+    const rayDy = target.lat - viewer.lat;
+    const rayMinLng = Math.min(viewer.lng, target.lng);
+    const rayMaxLng = Math.max(viewer.lng, target.lng);
+    const rayMinLat = Math.min(viewer.lat, target.lat);
+    const rayMaxLat = Math.max(viewer.lat, target.lat);
+
+    const hits: { t: number; height: number }[] = [];
+    for (const building of buildings) {
+      if (building.maxLng < rayMinLng || building.minLng > rayMaxLng ||
+          building.maxLat < rayMinLat || building.minLat > rayMaxLat) {
+        continue;
+      }
+      for (const t of findRayPolygonIntersections(viewer.lng, viewer.lat, rayDx, rayDy, building.coords)) {
+        if (t > MIN_T && t < 0.99) hits.push({ t, height: building.height });
+      }
+    }
+
+    const groundAtHit = await Promise.all(
+      hits.map((h) => getElevation(viewer.lat + rayDy * h.t, viewer.lng + rayDx * h.t)),
+    );
+    for (let i = 0; i < hits.length; i++) {
+      const ground = groundAtHit[i] ?? viewerElevation;
+      consider(hits[i].t, ground + hits[i].height);
+    }
+  }
+
+  return hBlock;
 }
 
 /**
@@ -121,7 +182,6 @@ function findRayPolygonIntersections(
     const [x1, y1] = polygon[j];
     const [x2, y2] = polygon[i];
 
-    // 辺の方向ベクトル
     const ex = x2 - x1;
     const ey = y2 - y1;
 
@@ -132,7 +192,6 @@ function findRayPolygonIntersections(
     const t = ((x1 - ox) * ey - (y1 - oy) * ex) / denom;
     const s = ((x1 - ox) * dy - (y1 - oy) * dx) / denom;
 
-    // t: 視線上のパラメータ (0-1), s: 辺上のパラメータ (0-1)
     if (t > 0 && t < 1 && s >= 0 && s <= 1) {
       intersections.push(t);
     }

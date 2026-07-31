@@ -17,6 +17,7 @@ import {
   fitToLaunchAndViewer,
   clearViewerMarker,
   flyToCenter,
+  setSafetyZone,
 } from './map.js';
 import { analyzePosition, scorePoint } from './api.js';
 import type { AnalyzeResponse, ScorePointResponse } from './types.js';
@@ -74,10 +75,16 @@ if (isMobile) {
   document.body.classList.add('is-mobile');
 }
 
+/** 保安半径（打上まわりの立入禁止）: 開花直径相当・最低150m。バックエンドと同一式 */
+function safetyRadiusMeters(): number {
+  return Math.max(currentFireworkDiameter ?? 150, 150);
+}
+
 function setLaunchSite(lat: number, lng: number): void {
   latInput.value = lat.toFixed(6);
   lngInput.value = lng.toFixed(6);
   setLaunchMarker(lat, lng);
+  setSafetyZone(lat, lng, safetyRadiusMeters());
 }
 
 // ============================================================
@@ -273,7 +280,6 @@ function showDesktopResults(response: AnalyzeResponse): void {
         打上げまで ${distanceWithWalk(p.distanceMeters)}
       </div>
       <div class="score-bar">
-        <div class="segment" style="flex:${p.score.viewingAngle};background:#3b82f6;" title="角度"></div>
         <div class="segment" style="flex:${p.score.lineOfSight};background:#22c55e;" title="視界"></div>
         <div class="segment" style="flex:${p.score.accessibility};background:#a855f7;" title="場所"></div>
         <div class="segment" style="flex:${p.score.elevation};background:#8b5cf6;" title="高さ"></div>
@@ -493,12 +499,10 @@ function showMobileScoreCard(response: ScorePointResponse): void {
     relElev > 10 ? `高台 +${relElev}m` : relElev > 3 ? `やや高い +${relElev}m` :
     relElev < -5 ? `低地 ${relElev}m` : `${relElev > 0 ? '+' : ''}${relElev}m`;
 
-  // Bars
-  const barAngle = document.getElementById('bar-angle') as HTMLElement | null;
+  // Bars（仰角は採点廃止のためバーなし。角度は情報値として数値のみ表示）
   const barLos = document.getElementById('bar-los') as HTMLElement | null;
   const barAccess = document.getElementById('bar-access') as HTMLElement | null;
   const barSlope = document.getElementById('bar-slope') as HTMLElement | null;
-  if (barAngle) barAngle.style.width = `${v.score.viewingAngle * 100}%`;
   if (barLos) barLos.style.width = losRaw < 0 ? '0%' : `${losRaw * 100}%`;
   if (barAccess) barAccess.style.width = `${accessScore * 100}%`;
   if (barSlope) barSlope.style.width = `${v.score.slope * 100}%`;

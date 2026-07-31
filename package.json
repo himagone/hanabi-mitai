@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "maplibre-gl": "^4.7.1"
+    "maplibre-gl": "^4.7.1",
+    "maplibre-gl-gsi-terrain": "^2.3.2"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

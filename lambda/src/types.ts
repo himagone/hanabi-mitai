@@ -18,7 +18,6 @@ export interface AnalyzeRequest {
 /** スコアの内訳 */
 export interface ScoreBreakdown {
   distance: number;
-  viewingAngle: number;
   elevation: number;
   lineOfSight: number;
   slope: number;
@@ -42,6 +41,7 @@ export interface AnalyzeResponse {
   launchSite: LatLng;
   launchSiteElevation: number;
   radiusMeters: number;
+  safetyRadiusMeters: number;
   totalPointsAnalyzed: number;
   topPositions: ScoredPoint[];
   geojson: GeoJSON.FeatureCollection;

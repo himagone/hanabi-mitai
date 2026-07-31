@@ -93,6 +93,57 @@ function estimateBuildingHeight(tags: Record<string, string>): number {
 }
 
 /**
+ * Overpass エンドポイント。overpass-api.de は Node(undici) からは 406 を返すため最後に置く。
+ */
+const OVERPASS_ENDPOINTS = [
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+];
+
+interface OverpassResponse {
+  elements: Array<{
+    geometry?: Array<{ lon: number; lat: number }>;
+    tags?: Record<string, string>;
+  }>;
+}
+
+/**
+ * Overpass クエリを実行。複数エンドポイントを順に試し、最初に成功したものを返す。
+ * 全滅時は null（＝未取得）。呼び出し側は建物・土地利用を「不明」として扱う。
+ */
+async function fetchOverpass(query: string, timeoutMs: number): Promise<OverpassResponse | null> {
+  const body = `data=${encodeURIComponent(query)}`;
+  for (const url of OVERPASS_ENDPOINTS) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'hanabi-mitai/1.0',
+        },
+        body,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        console.warn(`Overpass ${url}: ${response.status}`);
+        continue;
+      }
+      return (await response.json()) as OverpassResponse;
+    } catch (err) {
+      const reason = err instanceof Error && err.name === 'AbortError' ? 'timeout' : err;
+      console.warn(`Overpass ${url} failed:`, reason);
+      continue;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return null;
+}
+
+/**
  * Overpass API から土地利用 + 建物データを取得
  */
 export async function fetchLandUseAndBuildings(
@@ -129,28 +180,15 @@ export async function fetchLandUseAndBuildings(
 out geom;
 `;
 
-  try {
-    const url = 'https://overpass-api.de/api/interpreter';
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-    });
+  const data = await fetchOverpass(query, 10000);
+  if (data === null) {
+    // 全エンドポイント失敗 → 「不明」(null)。空配列にすると「建物なし」と誤認するため。
+    cachedLandUse = null;
+    cachedBuildings = null;
+    return;
+  }
 
-    if (!response.ok) {
-      console.warn('Overpass API error:', response.status);
-      cachedLandUse = [];
-      cachedBuildings = [];
-      return;
-    }
-
-    const data = await response.json() as {
-      elements: Array<{
-        geometry?: Array<{ lon: number; lat: number }>;
-        tags?: Record<string, string>;
-      }>;
-    };
-
+  {
     cachedLandUse = [];
     cachedBuildings = [];
 
@@ -210,10 +248,6 @@ out geom;
       `Loaded: ${cachedLandUse.length} land use polygons, ` +
       `${cachedBuildings.length} buildings (${withHeight} with explicit height)`,
     );
-  } catch (err) {
-    console.warn('Failed to fetch OSM data:', err);
-    cachedLandUse = [];
-    cachedBuildings = [];
   }
 }
 
@@ -221,8 +255,10 @@ out geom;
  * アクセシビリティスコア
  */
 export function accessibilityScore(point: LatLng): number {
+  // データ未取得（Overpass 失敗等）は「不明」として減点しない。
+  // 場所の快適さは副次要素で、見えるかどうかは可視率・仰角・距離が決める。
   if (!cachedLandUse || cachedLandUse.length === 0) {
-    return 0.6;
+    return 0.9;
   }
 
   let inPark = false;
@@ -238,9 +274,9 @@ export function accessibilityScore(point: LatLng): number {
     }
   }
 
-  if (inPark) return 1.0;
-  if (inResidential) return 0.3;
-  return 0.6;
+  if (inPark) return 1.0; // 公園・広場・河川敷: 観覧に最適
+  if (inResidential) return 0.7; // 住宅地: やや観覧しにくい（軽い減点に留める）
+  return 0.9; // その他/不明
 }
 
 /**
@@ -294,33 +330,15 @@ export async function fetchBuildingsForLOS(
 );
 out geom;`;
 
-  // 3秒でタイムアウト → デフォルト値にフォールバック
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
+  const data = await fetchOverpass(query, 4000);
+  if (data === null) {
+    // 全エンドポイント失敗 → 「不明」(null)。空配列にすると「建物なし」と誤認するため。
+    cachedBuildings = null;
+    cachedLandUse = null;
+    return;
+  }
 
-  try {
-    const url = 'https://overpass-api.de/api/interpreter';
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      console.warn('Overpass API error:', response.status);
-      cachedBuildings = [];
-      cachedLandUse = [];
-      return;
-    }
-
-    const data = await response.json() as {
-      elements: Array<{
-        geometry?: Array<{ lon: number; lat: number }>;
-        tags?: Record<string, string>;
-      }>;
-    };
-
+  {
     cachedBuildings = [];
     cachedLandUse = [];
 
@@ -374,14 +392,6 @@ out geom;`;
       `LOS corridor: ${cachedBuildings.length} buildings, ` +
       `${cachedLandUse.length} land use polygons loaded`,
     );
-  } catch (err) {
-    // タイムアウトまたはネットワークエラー → デフォルト値で続行
-    const reason = err instanceof Error && err.name === 'AbortError' ? 'timeout' : err;
-    console.warn('Overpass fetch skipped:', reason);
-    cachedBuildings = [];
-    cachedLandUse = [];
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

@@ -699,6 +699,19 @@ body {
   border-radius: 50%;
 }
 
+/* ===== 3D 建物・地形トグル ===== */
+/* top-left の既存コントロール（白背景 29px）と揃える。ラベルは「3D」 */
+.threed-ctrl button {
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--bg-primary);
+}
+
+.threed-ctrl button.active {
+  color: var(--bg-primary);
+  background: var(--accent);
+}
+
 /* ===== Popup ===== */
 .maplibregl-popup-content {
   background: var(--bg-surface) !important;

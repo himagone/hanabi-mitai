@@ -1,8 +1,22 @@
 import maplibregl from 'maplibre-gl';
+import { useGsiTerrainSource } from 'maplibre-gl-gsi-terrain';
 import type { AnalyzeResponse, ExclusionZone } from './types.js';
 
 const GEOLONIA_STYLE = `https://cdn.geolonia.com/style/geolonia/gsi/ja.json`;
 const MIN_DRAG_PX = 8;
+
+/**
+ * PLATEAU 建物ベクトルタイル（東京23区・実測高さ measuredHeight 付き）。
+ * source-layer は `bldg`。23区外は建物が表示されない（地形は全国で表示）。
+ */
+const PLATEAU_BLDG_TILES =
+  'https://indigo-lab.github.io/plateau-tokyo23ku-building-mvt-2020/{z}/{x}/{y}.pbf';
+/** 3D 表示時の地図の傾き（度）。歩行者目線に近い、ほぼ水平の見上げ角 */
+const PITCH_3D = 80;
+/** 3D 建物レイヤーの最小ズーム（これ未満だと建物が描画されない） */
+const BLDG_MIN_ZOOM = 13;
+/** 3D ON 時に引き寄せる最小ズーム（街路に立つ感覚が出る近さ） */
+const ZOOM_3D = 16;
 
 // --- Map references ---
 let map: maplibregl.Map | null = null;
@@ -55,6 +69,7 @@ export function initMap(
     center: [139.6917, 35.6895],
     zoom: 12,
     pitch: 0,
+    maxPitch: 85, // 歩行者目線（ほぼ水平）を許可。既定の 60° では届かない
   });
 
   map.addControl(new maplibregl.NavigationControl(), 'top-left');
@@ -65,6 +80,7 @@ export function initMap(
     }),
     'top-left',
   );
+  map.addControl(new ThreeDToggleControl(), 'top-left');
 
   map.on('load', () => {
     initLayers();
@@ -299,6 +315,24 @@ function commitZone(zone: [number, number][]): void {
 function initLayers(): void {
   if (!map) return;
 
+  // PLATEAU 建物・GSI 地形（除外ゾーンより先に追加して下に描画）
+  initTerrainAndBuildings();
+
+  // 打上まわりの立入禁止（保安）ゾーン（自動・常時表示）
+  map.addSource('safety-zone', { type: 'geojson', data: emptyPolygon() });
+  map.addLayer({
+    id: 'safety-zone-fill',
+    type: 'fill',
+    source: 'safety-zone',
+    paint: { 'fill-color': '#dc2626', 'fill-opacity': 0.22 },
+  });
+  map.addLayer({
+    id: 'safety-zone-outline',
+    type: 'line',
+    source: 'safety-zone',
+    paint: { 'line-color': '#dc2626', 'line-width': 2, 'line-dasharray': [2, 1] },
+  });
+
   // Confirmed zones
   map.addSource('exclusion-zones', { type: 'geojson', data: emptyFC() });
   map.addLayer({
@@ -367,6 +401,104 @@ function initLayers(): void {
       'circle-stroke-width': 2.5,
     },
   });
+}
+
+// ============================================================
+// PLATEAU 建物 + GSI 地形の可視化レイヤー
+//
+// 花火の見え方は「建物の実測高さ」と「地面の起伏」に左右される。
+// OSM の推定高さでは実態とずれるため、PLATEAU の実測高さ建物と
+// 地理院 DEM 地形を重ねて、遮蔽の理由を目視で確認できるようにする。
+// ============================================================
+
+let is3DActive = false;
+
+function initTerrainAndBuildings(): void {
+  if (!map) return;
+
+  // 地面の高低: 地理院 DEM（バックエンドの標高スコアと同一出典）
+  const terrainSource = useGsiTerrainSource(maplibregl.addProtocol, { maxzoom: 14 });
+  map.addSource('gsi-terrain', terrainSource);
+  map.addLayer({
+    id: 'hillshade',
+    type: 'hillshade',
+    source: 'gsi-terrain',
+    layout: { visibility: 'none' },
+    paint: { 'hillshade-exaggeration': 0.4 },
+  });
+
+  // PLATEAU 3D 建物: 高さ measuredHeight で押し出し、高さで色分け
+  map.addSource('plateau-bldg', {
+    type: 'vector',
+    tiles: [PLATEAU_BLDG_TILES],
+    minzoom: 10,
+    maxzoom: 16,
+    attribution: '<a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">PLATEAU</a>',
+  });
+  map.addLayer({
+    id: 'plateau-bldg-3d',
+    type: 'fill-extrusion',
+    source: 'plateau-bldg',
+    'source-layer': 'bldg',
+    minzoom: BLDG_MIN_ZOOM,
+    layout: { visibility: 'none' },
+    paint: {
+      'fill-extrusion-color': [
+        'interpolate', ['linear'], ['get', 'measuredHeight'],
+        0, '#5b8fd6', 15, '#8bb3e4', 30, '#c58fd6', 60, '#e57fb0',
+      ],
+      'fill-extrusion-height': ['get', 'measuredHeight'],
+      'fill-extrusion-base': 0,
+      'fill-extrusion-opacity': 0.85,
+    },
+  });
+}
+
+/** 3D 建物・地形の表示/非表示を切り替える */
+function set3DVisible(on: boolean): void {
+  if (!map) return;
+  is3DActive = on;
+  const visibility = on ? 'visible' : 'none';
+  map.setLayoutProperty('plateau-bldg-3d', 'visibility', visibility);
+  map.setLayoutProperty('hillshade', 'visibility', visibility);
+  map.setTerrain(on ? { source: 'gsi-terrain', exaggeration: 1.1 } : null);
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // ズームが浅いと建物レイヤー(minzoom)が描画されないため、ON 時は近づける
+  const zoom = on ? Math.max(map.getZoom(), ZOOM_3D) : map.getZoom();
+  map.easeTo({
+    pitch: on ? PITCH_3D : 0,
+    zoom,
+    duration: reduceMotion ? 0 : 600,
+  });
+}
+
+/** 地図右上の「3D 建物・地形」トグルボタン */
+class ThreeDToggleControl implements maplibregl.IControl {
+  private container!: HTMLElement;
+
+  onAdd(): HTMLElement {
+    this.container = document.createElement('div');
+    this.container.className = 'maplibregl-ctrl maplibregl-ctrl-group threed-ctrl';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = '3D';
+    button.title = '3D 建物・地形を表示';
+    button.setAttribute('aria-label', '3D 建物・地形を表示');
+    button.addEventListener('click', () => {
+      set3DVisible(!is3DActive);
+      button.classList.toggle('active', is3DActive);
+      button.setAttribute('aria-pressed', String(is3DActive));
+    });
+
+    this.container.appendChild(button);
+    return this.container;
+  }
+
+  onRemove(): void {
+    this.container.remove();
+  }
 }
 
 // --- Drawing mode starts ---
@@ -599,6 +731,31 @@ export function setLaunchMarker(lat: number, lng: number): void {
       ),
     )
     .addTo(map);
+}
+
+/**
+ * 打上まわりの立入禁止（保安）ゾーンを赤い円で表示する。
+ * radiusMeters は保安半径（max(開花直径, 150m)）。
+ */
+export function setSafetyZone(lat: number, lng: number, radiusMeters: number): void {
+  if (!map) return;
+  const src = map.getSource('safety-zone') as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+
+  const points = 72;
+  const dLat = radiusMeters / 111320;
+  const dLng = radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180));
+  const ring: [number, number][] = [];
+  for (let i = 0; i <= points; i++) {
+    const a = (i / points) * 2 * Math.PI;
+    ring.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]);
+  }
+
+  src.setData({
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [ring] },
+    properties: {},
+  });
 }
 
 export function clearResults(): void {
