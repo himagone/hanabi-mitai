@@ -1,0 +1,51 @@
+name: Deploy Lambda (SAM)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lambda/**'
+      - 'template.yaml'
+      - 'samconfig.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-lambda
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: lambda/package-lock.json
+
+      - name: Build Lambda bundle
+        working-directory: lambda
+        run: |
+          npm ci
+          npm run build
+
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: SAM deploy
+        run: >
+          sam deploy
+          --no-confirm-changeset
+          --no-fail-on-empty-changeset
