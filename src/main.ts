@@ -18,6 +18,7 @@ import {
   clearViewerMarker,
   flyToCenter,
   setSafetyZone,
+  setFireworkAt,
 } from './map.js';
 import { analyzePosition, scorePoint } from './api.js';
 import type { AnalyzeResponse, ScorePointResponse } from './types.js';
@@ -85,6 +86,7 @@ function setLaunchSite(lat: number, lng: number): void {
   lngInput.value = lng.toFixed(6);
   setLaunchMarker(lat, lng);
   setSafetyZone(lat, lng, safetyRadiusMeters());
+  setFireworkAt(lat, lng, currentFireworkDiameter);
 }
 
 // ============================================================

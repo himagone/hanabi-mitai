@@ -1,6 +1,7 @@
 import maplibregl from 'maplibre-gl';
 import { useGsiTerrainSource } from 'maplibre-gl-gsi-terrain';
 import type { AnalyzeResponse, ExclusionZone } from './types.js';
+import { FireworkLayer } from './firework.js';
 
 const GEOLONIA_STYLE = `https://cdn.geolonia.com/style/geolonia/gsi/ja.json`;
 const MIN_DRAG_PX = 8;
@@ -20,6 +21,7 @@ const ZOOM_3D = 16;
 
 // --- Map references ---
 let map: maplibregl.Map | null = null;
+let fireworkLayer: FireworkLayer | null = null;
 let launchMarker: maplibregl.Marker | null = null;
 let viewerMarker: maplibregl.Marker | null = null;
 const topMarkers: maplibregl.Marker[] = [];
@@ -401,6 +403,10 @@ function initLayers(): void {
       'circle-stroke-width': 2.5,
     },
   });
+
+  // 立体花火（最後に追加し、PLATEAU 建物の後に描画して遮蔽を成立させる）
+  fireworkLayer = new FireworkLayer();
+  map.addLayer(fireworkLayer);
 }
 
 // ============================================================
@@ -731,6 +737,25 @@ export function setLaunchMarker(lat: number, lng: number): void {
       ),
     )
     .addTo(map);
+}
+
+/**
+ * 打上地点の上空に立体花火を表示する。diameterMeters は大会ごとの開花直径。
+ *
+ * 高度・半径は SCORING.md の開花球モデルに一致させ、大会（号数）で決まる：
+ *   中心高度 = 直径 × 1.05、半径 = 直径 / 2（号数×約33m ≒ 号数×約32m の実測から）。
+ * 未指定時は 150m（5号玉相当）でバックエンドのデフォルトに合わせる。
+ * 打上地点標高は海抜 0m を仮定し、標高分の加算は省く。
+ */
+export function setFireworkAt(lat: number, lng: number, diameterMeters?: number): void {
+  if (!fireworkLayer) return;
+  const diameter = diameterMeters ?? 150;
+  const burstHeight = diameter * 1.05;
+  fireworkLayer.setAnchor(lat, lng, burstHeight, diameter / 2);
+}
+
+export function clearFirework(): void {
+  fireworkLayer?.clear();
 }
 
 /**
