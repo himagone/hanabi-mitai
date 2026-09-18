@@ -999,6 +999,11 @@ body {
     width: 100%;
   }
 
+  .launch-pin-toggle {
+    font-size: 0.8rem;
+    min-height: 36px;
+  }
+
   #header {
     padding: 8px 14px;
   }
