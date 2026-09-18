@@ -34,20 +34,6 @@ function burstExtent(
   };
 }
 
-/**
- * 「見え方の質」の重み。
- *
- * 遮蔽(lineOfSight)は加算項ではなく乗算項（total = 質 × 遮蔽 × 距離乗数）なので含めない。
- * 仰角の"好み"は廃止（最適角の仮定が恣意的で、近すぎ危険は立入禁止エリアで扱うため）。
- * 残る3項目を合計 QUALITY_WEIGHT_SUM で割って 0〜1 に再正規化する。
- */
-const WEIGHTS = {
-  elevation: 0.15,
-  slope: 0.10,
-  accessibility: 0.15,
-};
-const QUALITY_WEIGHT_SUM =
-  WEIGHTS.elevation + WEIGHTS.slope + WEIGHTS.accessibility;
 
 /** 建物データ未取得時、地形のみの可視割合に掛ける不確実性割引 */
 const UNKNOWN_BUILDINGS_CONFIDENCE = 0.9;
@@ -145,25 +131,12 @@ function slopeScore(
   return 1.0 + 0.5 * Math.min(0, normalizedDot);
 }
 
-/** 見え方の質（0〜1）: 遮蔽を除いた3項目の重み付き和を再正規化 */
-function qualityScore(
-  elevScore: number,
-  slopeS: number,
-  accessScore: number,
-): number {
-  return (
-    WEIGHTS.elevation * elevScore +
-    WEIGHTS.slope * slopeS +
-    WEIGHTS.accessibility * accessScore
-  ) / QUALITY_WEIGHT_SUM;
-}
-
 /**
  * パス1: スコアの上限値（分枝限定法用・ネットワーク不要）
  *
- * 未計算の勾配・遮蔽を満点(1.0)と仮定した上限値を返す。
- * この上限値でソートし、上限が現時点の上位 real スコアを下回った点は
- * 本採点しても上位に入り得ないため打ち切れる（取りこぼしゼロ）。
+ * total = occlusion × distanceVisibility のうち、未計算の遮蔽を満点(1.0)と仮定した上限値。
+ * 上限が現時点の上位 real スコアを下回った点は本採点しても上位に入り得ないため打ち切れる
+ * （real ≤ 上限 が常に成立するため取りこぼしゼロ）。
  */
 export function quickScorePoint(
   point: GridPoint,
@@ -176,22 +149,20 @@ export function quickScorePoint(
   const burst = burstExtent(launchSiteElevation, fireworkDiameter);
 
   const angleDeg = viewingAngleDeg(dist, point.elevation, burst.center);
-  const elevScore = elevationScore(relElev);
-  const accessScore = accessibilityScore(point);
   const distVis = distanceVisibilityScore(dist, fireworkDiameter);
 
-  // 勾配・遮蔽を満点と仮定した上限
-  const qualityUB = qualityScore(elevScore, 1.0, accessScore);
-  const quickScoreUB = qualityUB * 1.0 * distVis;
+  // 遮蔽を満点(1.0)と仮定した上限（total = occlusion × distVis）
+  const quickScoreUB = distVis;
 
   return { dist, relElev, angleDeg, quickScoreUB };
 }
 
 /**
- * パス2: フルスコアリング（遮蔽=乗算項）
+ * パス2: フルスコアリング
  *
- * total = 質(quality) × 遮蔽(可視割合) × 距離乗数
- * 遮蔽が 0 なら他が満点でも 0 点になる。
+ * total = occlusion × distanceVisibility
+ * 遮蔽が 0 なら距離が近くても 0 点になる。
+ * elevation/slope/accessibility は表示用の参考値として ScoreBreakdown に含める。
  */
 export async function fullScorePoint(
   point: GridPoint,
@@ -220,10 +191,9 @@ export async function fullScorePoint(
   const accessScore = accessibilityScore(point);
   const distVis = distanceVisibilityScore(dist, fireworkDiameter);
 
-  const quality = qualityScore(elevScore, slopeS, accessScore);
   // 遮蔽（可視割合）を乗算。建物データ未取得時は地形のみなので控えめに割引
   const occlusion = los.buildingsKnown ? los.fraction : los.fraction * UNKNOWN_BUILDINGS_CONFIDENCE;
-  const total = quality * occlusion * distVis;
+  const total = occlusion * distVis;
 
   const scores: ScoreBreakdown = {
     distance: distVis,
