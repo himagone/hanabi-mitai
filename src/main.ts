@@ -158,16 +158,16 @@ if (!isMobile) {
     }
   });
 
-  launchMarkerToggle?.addEventListener('change', () => {
-    setLaunchMarkerVisible(launchMarkerToggle.checked);
-  });
-
   [latInput, lngInput].forEach((input) => {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') runDesktopAnalysis();
     });
   });
 }
+
+launchMarkerToggle?.addEventListener('change', () => {
+  setLaunchMarkerVisible(launchMarkerToggle.checked);
+});
 
 async function runDesktopAnalysis(): Promise<void> {
   const lat = parseFloat(latInput.value);

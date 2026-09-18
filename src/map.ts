@@ -798,7 +798,6 @@ export function setSafetyZone(lat: number, lng: number, radiusMeters: number): v
 export function clearResults(): void {
   if (!map) return;
   if (map.getLayer('heatmap-layer')) map.removeLayer('heatmap-layer');
-  if (map.getLayer('score-circles')) map.removeLayer('score-circles');
   if (map.getSource('scored-points')) map.removeSource('scored-points');
   for (const m of topMarkers) m.remove();
   topMarkers.length = 0;
@@ -826,53 +825,21 @@ export function renderResults(response: AnalyzeResponse): void {
     source: 'scored-points',
     paint: {
       'heatmap-weight': ['get', 'score'],
-      'heatmap-intensity': 1.5,
-      'heatmap-radius': 25,
+      // ズームが上がるほど強度を下げてピンが見やすくなる
+      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 1.2, 15, 0.8],
+      // ズームに合わせて半径を広げ、低ズームでも潰れず高ズームでも広がりすぎない
+      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 20, 14, 35, 16, 50],
+      // アプリのパレット（赤→黄→青→緑）に統一。高スコアが緑になる
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
-        0, 'rgba(0,0,0,0)',
-        0.2, 'rgba(0,0,255,0.3)',
-        0.4, 'rgba(0,255,255,0.4)',
-        0.6, 'rgba(0,255,0,0.5)',
-        0.8, 'rgba(255,255,0,0.6)',
-        1, 'rgba(255,0,0,0.7)',
+        0,   'rgba(0,0,0,0)',
+        0.2, 'rgba(248,113,113,0.35)',
+        0.4, 'rgba(251,191,36,0.5)',
+        0.65, 'rgba(139,179,228,0.6)',
+        1,   'rgba(110,231,160,0.75)',
       ],
-      'heatmap-opacity': 0.7,
+      'heatmap-opacity': 0.85,
     },
-  });
-
-  map.addLayer({
-    id: 'score-circles',
-    type: 'circle',
-    source: 'scored-points',
-    minzoom: 14,
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 3, 18, 10],
-      'circle-color': [
-        'interpolate', ['linear'], ['get', 'score'],
-        0, '#ef4444', 0.3, '#f97316', 0.5, '#eab308', 0.7, '#22c55e',
-      ],
-      'circle-opacity': 0.6,
-      'circle-stroke-width': 1,
-      'circle-stroke-color': 'rgba(255,255,255,0.3)',
-    },
-  });
-
-  map.on('click', 'score-circles', (e) => {
-    if (!e.features || e.features.length === 0) return;
-    const f = e.features[0];
-    const coords = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
-    const p = f.properties!;
-    new maplibregl.Popup({ offset: 10 })
-      .setLngLat(coords)
-      .setHTML(
-        `<div class="popup-title">${(p.score * 100).toFixed(0)}点</div>
-         <div class="popup-detail">
-           ${p.distance}m / ${p.viewingAngle}°<br>
-           ${p.relativeElevation > 0 ? '+' : ''}${p.relativeElevation}m / 視線${(p.scoreLOS * 100).toFixed(0)}%<br>
-         </div>`,
-      )
-      .addTo(map!);
   });
 
   map.on('mouseenter', 'score-circles', () => {
