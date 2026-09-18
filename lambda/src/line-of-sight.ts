@@ -4,8 +4,8 @@ import { getCachedBuildings, type BuildingPolygon } from './accessibility.js';
 import { getCachedPlateauBuildings } from './plateau.js';
 import { haversineDistance, samplePointsBetween } from './grid.js';
 
-/** 地形サンプリング間隔 (m) */
-const TERRAIN_SAMPLE_INTERVAL = 40;
+/** 地形サンプリング間隔 (m) — DEM5A の実解像度約 4.7m に対して 2 倍余裕を持つ */
+const TERRAIN_SAMPLE_INTERVAL = 10;
 /**
  * 視点に近すぎる遮蔽物を無視する距離比の下限。
  * t→0 で必要視線高さが発散するため 0 割りだけ避ける。目の前の建物こそ最も遮るので
