@@ -146,6 +146,8 @@ export class FireworkLayer implements maplibregl.CustomLayerInterface {
   }
 
   onRemove(): void {
+    // 両マテリアルは同一テクスチャを参照するため1回だけ解放する
+    this.sparkMaterial.map?.dispose();
     this.sparks.geometry.dispose();
     this.trail.geometry.dispose();
     this.sparkMaterial.dispose();
