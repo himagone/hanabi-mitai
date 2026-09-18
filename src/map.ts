@@ -23,6 +23,7 @@ const ZOOM_3D = 16;
 let map: maplibregl.Map | null = null;
 let fireworkLayer: FireworkLayer | null = null;
 let launchMarker: maplibregl.Marker | null = null;
+let launchMarkerVisible = true;
 let viewerMarker: maplibregl.Marker | null = null;
 const topMarkers: maplibregl.Marker[] = [];
 
@@ -735,8 +736,19 @@ export function setLaunchMarker(lat: number, lng: number): void {
         `<div class="popup-title">打上地点</div>
          <div class="popup-detail">${lat.toFixed(4)}, ${lng.toFixed(4)}</div>`,
       ),
-    )
-    .addTo(map);
+    );
+
+  if (launchMarkerVisible) launchMarker.addTo(map);
+}
+
+export function setLaunchMarkerVisible(visible: boolean): void {
+  launchMarkerVisible = visible;
+  if (!launchMarker || !map) return;
+  if (visible) {
+    launchMarker.addTo(map);
+  } else {
+    launchMarker.remove();
+  }
 }
 
 /**
