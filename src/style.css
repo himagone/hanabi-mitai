@@ -416,6 +416,17 @@ body {
   font-size: 0.7rem;
   color: var(--text-muted);
   align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.launch-pin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
 }
 
 /* ===== Map ===== */

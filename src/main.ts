@@ -19,6 +19,7 @@ import {
   flyToCenter,
   setSafetyZone,
   setFireworkAt,
+  setLaunchMarkerVisible,
 } from './map.js';
 import { analyzePosition, scorePoint } from './api.js';
 import type { AnalyzeResponse, ScorePointResponse } from './types.js';
@@ -54,6 +55,7 @@ const drawRectBtn = document.getElementById('draw-rect-btn') as HTMLButtonElemen
 const undoExclusionBtn = document.getElementById('undo-exclusion-btn') as HTMLButtonElement | null;
 const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTMLButtonElement | null;
 const editLaunchBtn = document.getElementById('edit-launch-btn') as HTMLButtonElement | null;
+const launchMarkerToggle = document.getElementById('launch-marker-toggle') as HTMLInputElement | null;
 
 let isEditingLaunchSite = false;
 
@@ -154,6 +156,10 @@ if (!isMobile) {
     } else {
       editorHint.classList.add('hidden');
     }
+  });
+
+  launchMarkerToggle?.addEventListener('change', () => {
+    setLaunchMarkerVisible(launchMarkerToggle.checked);
   });
 
   [latInput, lngInput].forEach((input) => {
