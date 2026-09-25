@@ -68,6 +68,18 @@ const pinAnalyzeBtn = document.getElementById('pin-analyze-btn') as HTMLButtonEl
 const pinRetryBtn = document.getElementById('pin-retry-btn') as HTMLButtonElement | null;
 
 let isAnalyzing = false;
+
+function showToast(message: string): void {
+  document.querySelector('.toast')?.remove();
+  const container = document.getElementById('map-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-error';
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
 let currentFireworkDiameter: number | undefined;
 // モバイル: ピン設置済みの座標を保持（API未呼び出し）
 let pendingViewerLat: number | null = null;
@@ -150,6 +162,8 @@ if (!isMobile) {
   editLaunchBtn?.addEventListener('click', () => {
     isEditingLaunchSite = !isEditingLaunchSite;
     editLaunchBtn.classList.toggle('active', isEditingLaunchSite);
+    editLaunchBtn.setAttribute('aria-pressed', String(isEditingLaunchSite));
+    editLaunchBtn.textContent = isEditingLaunchSite ? '打上地点を指定中 — 完了' : '地図から打上地点を指定';
     if (isEditingLaunchSite) {
       editorHint.classList.remove('hidden');
       editorHintText.textContent = '地図をクリックして打上地点を指定 · もう一度押して終了';
@@ -174,11 +188,11 @@ async function runDesktopAnalysis(): Promise<void> {
   const lng = parseFloat(lngInput.value);
 
   if (isNaN(lat) || isNaN(lng)) {
-    alert('緯度と経度を入力してください');
+    showToast('緯度と経度を入力してください');
     return;
   }
   if (lat < 20 || lat > 46 || lng < 122 || lng > 154) {
-    alert('日本国内の座標を入力してください');
+    showToast('日本国内の座標を入力してください');
     return;
   }
 
@@ -231,7 +245,7 @@ async function runDesktopAnalysis(): Promise<void> {
   } catch (err) {
     console.error('Analysis failed:', err);
     const message = err instanceof Error ? err.message : '不明なエラー';
-    alert(`分析に失敗しました: ${message}`);
+    showToast(`分析に失敗しました: ${message}`);
   } finally {
     clearTimeout(stepTimer1);
     clearTimeout(stepTimer2);
@@ -268,7 +282,7 @@ function showDesktopResults(response: AnalyzeResponse): void {
   resultsListEl.innerHTML = '';
 
   const summary = document.createElement('p');
-  summary.style.cssText = 'font-size:0.8rem;color:#888;margin-bottom:12px;';
+  summary.className = 'results-summary';
   summary.textContent = `${response.totalPointsAnalyzed}地点を分析`;
   resultsListEl.appendChild(summary);
 
@@ -287,11 +301,11 @@ function showDesktopResults(response: AnalyzeResponse): void {
       <div class="details">
         打上げまで ${distanceWithWalk(p.distanceMeters)}
       </div>
-      <div class="score-bar">
-        <div class="segment" style="flex:${p.score.lineOfSight};background:#22c55e;" title="視界"></div>
-        <div class="segment" style="flex:${p.score.accessibility};background:#a855f7;" title="場所"></div>
-        <div class="segment" style="flex:${p.score.elevation};background:#8b5cf6;" title="高さ"></div>
-        <div class="segment" style="flex:${p.score.slope};background:#f59e0b;" title="地形"></div>
+      <div class="score-bar" role="img" aria-label="スコア内訳">
+        <div class="segment" style="flex:${p.score.lineOfSight};background:#22c55e;" aria-label="視界 ${(p.score.lineOfSight * 100).toFixed(0)}%"></div>
+        <div class="segment" style="flex:${p.score.accessibility};background:#a855f7;" aria-label="場所 ${(p.score.accessibility * 100).toFixed(0)}%"></div>
+        <div class="segment" style="flex:${p.score.elevation};background:#8b5cf6;" aria-label="高さ ${(p.score.elevation * 100).toFixed(0)}%"></div>
+        <div class="segment" style="flex:${p.score.slope};background:#f59e0b;" aria-label="地形 ${(p.score.slope * 100).toFixed(0)}%"></div>
       </div>
     `;
     resultsListEl.appendChild(card);
@@ -359,6 +373,7 @@ async function runMobileGPS(): Promise<void> {
       presetHint.textContent = '花火大会を選ぶと使えます';
       presetHint.classList.remove('hidden');
       presetSelect.style.borderColor = 'var(--yellow)';
+      presetSelect.focus();
       presetSelect.addEventListener('change', () => {
         presetHint.classList.add('hidden');
         presetSelect.style.borderColor = '';
@@ -443,7 +458,7 @@ async function scoreFromLocation(viewerLat: number, viewerLng: number): Promise<
   } catch (err) {
     console.error('Score failed:', err);
     const message = err instanceof Error ? err.message : '不明なエラー';
-    alert(`スコア計算に失敗しました: ${message}`);
+    showToast(`スコア計算に失敗しました: ${message}`);
   } finally {
     isAnalyzing = false;
     if (loadingEl) loadingEl.classList.add('hidden');
@@ -578,6 +593,24 @@ if (isMobile && mobileScoreCard) {
     editorHint.classList.remove('hidden');
     editorHintText.textContent = '地図タップで見え方を確認';
   });
+
+  // 下スワイプで最小化、上スワイプで展開
+  let bsTouchStartY = 0;
+  let bsTouchStartTime = 0;
+
+  mobileScoreCard.addEventListener('touchstart', (e) => {
+    bsTouchStartY = e.touches[0].clientY;
+    bsTouchStartTime = Date.now();
+  }, { passive: true });
+
+  mobileScoreCard.addEventListener('touchend', (e) => {
+    const dy = e.changedTouches[0].clientY - bsTouchStartY;
+    const dt = Date.now() - bsTouchStartTime;
+    if (dt < 400) {
+      if (dy > 50 && !bsMinimized) minimizeScoreCard();
+      else if (dy < -50 && bsMinimized) expandScoreCard();
+    }
+  }, { passive: true });
 }
 
 // ============================================================
