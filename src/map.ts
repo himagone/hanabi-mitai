@@ -23,7 +23,7 @@ const ZOOM_3D = 16;
 let map: maplibregl.Map | null = null;
 let fireworkLayer: FireworkLayer | null = null;
 let launchMarker: maplibregl.Marker | null = null;
-let launchMarkerVisible = true;
+let launchMarkerVisible = false;
 let viewerMarker: maplibregl.Marker | null = null;
 const topMarkers: maplibregl.Marker[] = [];
 
@@ -508,6 +508,50 @@ class ThreeDToggleControl implements maplibregl.IControl {
   }
 }
 
+let launchEditButton: HTMLButtonElement | null = null;
+
+/** 地図右上の「地図から打上地点を指定」トグルボタン */
+class LaunchEditControl implements maplibregl.IControl {
+  private container!: HTMLElement;
+  constructor(private readonly onToggle: () => void) {}
+
+  onAdd(): HTMLElement {
+    this.container = document.createElement('div');
+    this.container.className = 'maplibregl-ctrl maplibregl-ctrl-group launch-edit-ctrl';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.title = '地図から打上地点を指定';
+    button.setAttribute('aria-label', '地図から打上地点を指定');
+    // 旗（フラッグ）: 「地図上の任意の点に印を立てる」操作であることを示す。
+    // 現在地ボタンの照準アイコンや打上地点ピンのアイコンと形を変え、別機能だと一目で区別できるようにする。
+    button.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <line x1="4" y1="1.5" x2="4" y2="14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M4 2.2c2.5-1.2 4 1.2 6.5 0 .6-.3 1 .1 1 .6v4.4c0 .5-.4.9-1 .6-2.5-1.2-4 1.2-6.5 0z" fill="currentColor"/>
+    </svg>`;
+    button.addEventListener('click', this.onToggle);
+
+    this.container.appendChild(button);
+    launchEditButton = button;
+    return this.container;
+  }
+
+  onRemove(): void {
+    this.container.remove();
+    launchEditButton = null;
+  }
+}
+
+/** 「地図から打上地点を指定」ボタンを地図付属のコントロールとして追加する */
+export function addLaunchEditControl(onToggle: () => void): void {
+  map?.addControl(new LaunchEditControl(onToggle), 'top-left');
+}
+
+export function setLaunchEditActive(active: boolean): void {
+  launchEditButton?.classList.toggle('active', active);
+  launchEditButton?.setAttribute('aria-pressed', String(active));
+}
+
 // --- Drawing mode starts ---
 
 export function startDrawingRect(): void {
@@ -922,9 +966,10 @@ export function fitToLaunchAndViewer(bottomPadding?: number): void {
   map.fitBounds(bounds, { padding: pad, maxZoom: 15 });
 }
 
-export function flyToCenter(lat: number, lng: number, zoom?: number): void {
+/** 打上地点を中心に、花火が映える角度（3D 表示と同じ画角）へ移動する */
+export function flyToLaunchSite(lat: number, lng: number): void {
   if (!map) return;
-  map.flyTo({ center: [lng, lat], zoom: zoom ?? map.getZoom(), duration: 800 });
+  map.flyTo({ center: [lng, lat], zoom: ZOOM_3D, pitch: PITCH_3D, duration: 800 });
 }
 
 export function clearViewerMarker(): void {

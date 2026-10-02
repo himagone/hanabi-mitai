@@ -16,10 +16,13 @@ import {
   setViewerMarker,
   fitToLaunchAndViewer,
   clearViewerMarker,
-  flyToCenter,
+  flyToLaunchSite,
   setSafetyZone,
   setFireworkAt,
+  clearFirework,
   setLaunchMarkerVisible,
+  addLaunchEditControl,
+  setLaunchEditActive,
 } from './map.js';
 import { analyzePosition, scorePoint } from './api.js';
 import type { AnalyzeResponse, ScorePointResponse } from './types.js';
@@ -54,7 +57,6 @@ function setLoadingText(text: string): void {
 const drawRectBtn = document.getElementById('draw-rect-btn') as HTMLButtonElement | null;
 const undoExclusionBtn = document.getElementById('undo-exclusion-btn') as HTMLButtonElement | null;
 const clearExclusionBtn = document.getElementById('clear-exclusion-btn') as HTMLButtonElement | null;
-const editLaunchBtn = document.getElementById('edit-launch-btn') as HTMLButtonElement | null;
 const launchMarkerToggle = document.getElementById('launch-marker-toggle') as HTMLInputElement | null;
 
 let isEditingLaunchSite = false;
@@ -88,7 +90,11 @@ function setLaunchSite(lat: number, lng: number): void {
   lngInput.value = lng.toFixed(6);
   setLaunchMarker(lat, lng);
   setSafetyZone(lat, lng, safetyRadiusMeters());
-  setFireworkAt(lat, lng, currentFireworkDiameter);
+  if (launchMarkerToggle?.checked) {
+    clearFirework();
+  } else {
+    setFireworkAt(lat, lng, currentFireworkDiameter);
+  }
 }
 
 // ============================================================
@@ -126,7 +132,7 @@ if (!isMobile) {
   drawRectBtn?.addEventListener('click', () => {
     // 打上地点編集モードを解除
     isEditingLaunchSite = false;
-    editLaunchBtn?.classList.remove('active');
+    setLaunchEditActive(false);
     if (getEditorMode() === 'drawing-rect') {
       cancelDrawing();
     } else {
@@ -146,18 +152,6 @@ if (!isMobile) {
 
   analyzeBtn.addEventListener('click', runDesktopAnalysis);
 
-  // 打上地点編集モード
-  editLaunchBtn?.addEventListener('click', () => {
-    isEditingLaunchSite = !isEditingLaunchSite;
-    editLaunchBtn.classList.toggle('active', isEditingLaunchSite);
-    if (isEditingLaunchSite) {
-      editorHint.classList.remove('hidden');
-      editorHintText.textContent = '地図をクリックして打上地点を指定 · もう一度押して終了';
-    } else {
-      editorHint.classList.add('hidden');
-    }
-  });
-
   [latInput, lngInput].forEach((input) => {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') runDesktopAnalysis();
@@ -165,9 +159,30 @@ if (!isMobile) {
   });
 }
 
+/** 打上地点の表示をピンに切り替える（オフ時は3D花火を表示） */
 launchMarkerToggle?.addEventListener('change', () => {
-  setLaunchMarkerVisible(launchMarkerToggle.checked);
+  const showPin = launchMarkerToggle.checked;
+  setLaunchMarkerVisible(showPin);
+  if (showPin) {
+    clearFirework();
+    return;
+  }
+  const lat = parseFloat(latInput.value);
+  const lng = parseFloat(lngInput.value);
+  if (!isNaN(lat) && !isNaN(lng)) setFireworkAt(lat, lng, currentFireworkDiameter);
 });
+
+/** 打上地点編集モードの切り替え（地図付属のトグルボタンから呼ばれる） */
+function toggleLaunchEditMode(): void {
+  isEditingLaunchSite = !isEditingLaunchSite;
+  setLaunchEditActive(isEditingLaunchSite);
+  if (isEditingLaunchSite) {
+    editorHint.classList.remove('hidden');
+    editorHintText.textContent = '地図をクリックして打上地点を指定 · もう一度押して終了';
+  } else {
+    editorHint.classList.add('hidden');
+  }
+}
 
 async function runDesktopAnalysis(): Promise<void> {
   const lat = parseFloat(latInput.value);
@@ -592,7 +607,7 @@ presetSelect.addEventListener('change', () => {
   const diameterAttr = selectedOption?.getAttribute('data-diameter');
   currentFireworkDiameter = diameterAttr ? parseInt(diameterAttr, 10) : undefined;
   setLaunchSite(lat, lng);
-  flyToCenter(lat, lng, 14);
+  flyToLaunchSite(lat, lng);
   if (isMobile) {
     mobileScoreCard?.classList.add('hidden');
     clearPendingPin();
@@ -619,6 +634,10 @@ initMap('map', (lat, lng) => {
   setLaunchSite(lat, lng);
   // 設置後は編集モードを解除
   isEditingLaunchSite = false;
-  editLaunchBtn?.classList.remove('active');
+  setLaunchEditActive(false);
   editorHint.classList.add('hidden');
 });
+
+if (!isMobile) {
+  addLaunchEditControl(toggleLaunchEditMode);
+}

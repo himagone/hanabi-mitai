@@ -368,32 +368,6 @@ body {
   border-color: var(--red);
 }
 
-.btn-tool.btn-small-link {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-size: 0.7rem;
-  font-family: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: all 0.2s;
-}
-
-.btn-tool.btn-small-link:hover {
-  color: var(--text-primary);
-}
-
-.btn-tool.btn-small-link.active {
-  background: var(--accent);
-  color: var(--bg-primary);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  padding: 3px 8px;
-  text-decoration: none;
-}
-
 /* Editor hint */
 #editor-hint {
   position: absolute;
@@ -412,21 +386,26 @@ body {
   border: 1px solid var(--border);
 }
 
-.hint {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  align-self: center;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .launch-pin-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
   user-select: none;
+}
+
+.launch-pin-toggle:has(input:checked) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-primary);
 }
 
 /* ===== Map ===== */
@@ -719,6 +698,12 @@ body {
 }
 
 .threed-ctrl button.active {
+  color: var(--bg-primary);
+  background: var(--accent);
+}
+
+/* ===== 地図から打上地点を指定トグル ===== */
+.launch-edit-ctrl button.active {
   color: var(--bg-primary);
   background: var(--accent);
 }
