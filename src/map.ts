@@ -548,8 +548,12 @@ export function addLaunchEditControl(onToggle: () => void): void {
 }
 
 export function setLaunchEditActive(active: boolean): void {
-  launchEditButton?.classList.toggle('active', active);
-  launchEditButton?.setAttribute('aria-pressed', String(active));
+  if (!launchEditButton) return;
+  launchEditButton.classList.toggle('active', active);
+  launchEditButton.setAttribute('aria-pressed', String(active));
+  const label = active ? '打上地点を指定中 — もう一度押して終了' : '地図から打上地点を指定';
+  launchEditButton.title = label;
+  launchEditButton.setAttribute('aria-label', label);
 }
 
 // --- Drawing mode starts ---
