@@ -83,12 +83,13 @@
         <button id="undo-exclusion-btn" type="button" class="btn-tool btn-small hidden">戻す</button>
         <button id="clear-exclusion-btn" type="button" class="btn-tool btn-small hidden">全削除</button>
       </div>
-      <p class="hint desktop-only">
-        <button id="edit-launch-btn" type="button" class="btn-tool btn-small-link">地図から打上地点を指定</button>
-      </p>
-      <label class="launch-pin-toggle">
-        <input type="checkbox" id="launch-marker-toggle" checked />
-        打上地点を表示
+      <label class="btn-tool launch-pin-toggle" for="launch-marker-toggle">
+        <input type="checkbox" id="launch-marker-toggle" class="sr-only" />
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 1C5.2 1 3 3.2 3 6c0 3.8 5 9 5 9s5-5.2 5-9c0-2.8-2.2-5-5-5z" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="8" cy="6" r="1.7" fill="currentColor"/>
+        </svg>
+        打ち上げ地点をピンに切り替え
       </label>
     </div>
 
