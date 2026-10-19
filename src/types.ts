@@ -7,20 +7,6 @@ export interface LatLng {
 /** 除外ポリゴン (頂点の配列) */
 export type ExclusionZone = [number, number][]; // [lng, lat][]
 
-/** 単一地点スコアリクエスト */
-export interface ScorePointRequest {
-  launchSite: LatLng;
-  viewerLocation: LatLng;
-  fireworkDiameter?: number;
-}
-
-/** 単一地点スコアレスポンス */
-export interface ScorePointResponse {
-  launchSite: LatLng;
-  launchSiteElevation: number;
-  viewer: ScoredPoint;
-}
-
 /** 分析リクエスト */
 export interface AnalyzeRequest {
   launchSite: LatLng;
@@ -60,6 +46,28 @@ export interface AnalyzeResponse {
   topPositions: ScoredPoint[];
   geojson: GeoJSON.FeatureCollection;
 }
+
+/** 単一地点スコアリクエスト */
+export interface ScorePointRequest {
+  launchSite: LatLng;
+  viewerLocation: LatLng;
+  fireworkDiameter?: number;
+}
+
+/** 単一地点スコアレスポンス */
+export interface ScorePointResponse {
+  launchSite: LatLng;
+  launchSiteElevation: number;
+  viewer: ScoredPoint;
+}
+
+/** グリッド上の地点（標高付き） */
+export interface GridPoint {
+  lat: number;
+  lng: number;
+  elevation: number;
+}
+
 
 /** GeoJSON 型定義 */
 export namespace GeoJSON {

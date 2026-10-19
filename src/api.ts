@@ -1,69 +1,20 @@
 import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse } from './types.js';
+import type { WorkerRequest } from './analysis/worker.js';
 
-const API_BASE = import.meta.env.DEV
-  ? '/api'
-  : 'https://fl267a9ued.execute-api.ap-northeast-1.amazonaws.com/prod/api';
+const worker = new Worker(new URL('./analysis/worker.ts', import.meta.url), { type: 'module' });
 
-export async function analyzePosition(
-  request: AnalyzeRequest,
-): Promise<AnalyzeResponse> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-  } catch (err) {
-    throw new Error(
-      `APIサーバーに接続できません。Lambda ローカルサーバー (port 3001) が起動しているか確認してください。` +
-      (err instanceof Error ? `\n${err.message}` : ''),
-    );
-  }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    let message = `HTTP ${response.status}`;
-    try {
-      const json = JSON.parse(text);
-      if (json.error) message = json.error;
-    } catch {
-      if (text) message += `: ${text.slice(0, 200)}`;
-    }
-    throw new Error(message);
-  }
-
-  return response.json();
+function call<T>(request: WorkerRequest): Promise<T> {
+  const { port1, port2 } = new MessageChannel();
+  worker.postMessage(request, [port2]);
+  return new Promise<T>((resolve, reject) => {
+    port1.onmessage = ({ data }) => (data.error !== undefined ? reject(new Error(data.error)) : resolve(data.result));
+  });
 }
 
-export async function scorePoint(
-  request: ScorePointRequest,
-): Promise<ScorePointResponse> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}/score-point`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-  } catch (err) {
-    throw new Error(
-      `APIサーバーに接続できません。Lambda ローカルサーバー (port 3001) が起動しているか確認してください。` +
-      (err instanceof Error ? `\n${err.message}` : ''),
-    );
-  }
+export function analyzePosition(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+  return call({ kind: 'analyze', payload: request });
+}
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    let message = `HTTP ${response.status}`;
-    try {
-      const json = JSON.parse(text);
-      if (json.error) message = json.error;
-    } catch {
-      if (text) message += `: ${text.slice(0, 200)}`;
-    }
-    throw new Error(message);
-  }
-
-  return response.json();
+export function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
+  return call({ kind: 'score-point', payload: request });
 }

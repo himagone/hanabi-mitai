@@ -1,4 +1,4 @@
-import type { LatLng, ExclusionZone } from './types.js';
+import type { LatLng, ExclusionZone } from '../types.js';
 
 /** 地球の半径 (m) */
 const EARTH_RADIUS = 6371000;

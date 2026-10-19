@@ -1,4 +1,4 @@
-import type { LatLng } from './types.js';
+import type { LatLng } from '../types.js';
 import { getElevation } from './elevation.js';
 import { getCachedBuildings, type BuildingPolygon } from './accessibility.js';
 import { getCachedPlateauBuildings } from './plateau.js';

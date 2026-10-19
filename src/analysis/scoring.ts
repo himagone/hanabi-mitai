@@ -1,4 +1,4 @@
-import type { LatLng, GridPoint, ScoreBreakdown, ScoredPoint } from './types.js';
+import type { LatLng, GridPoint, ScoreBreakdown, ScoredPoint } from '../types.js';
 import { haversineDistance } from './grid.js';
 import { getElevation } from './elevation.js';
 import { checkLineOfSight } from './line-of-sight.js';
