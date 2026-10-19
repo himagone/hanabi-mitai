@@ -1,4 +1,4 @@
-import type { LatLng } from './types.js';
+import type { LatLng } from '../types.js';
 
 /**
  * OpenStreetMap の Overpass API から土地利用データ＋建物データを取得し、
@@ -92,13 +92,11 @@ function estimateBuildingHeight(tags: Record<string, string>): number {
   }
 }
 
-/**
- * Overpass エンドポイント。overpass-api.de は Node(undici) からは 406 を返すため最後に置く。
- */
 const OVERPASS_ENDPOINTS = [
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
   'https://overpass.openstreetmap.fr/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass-api.de/api/interpreter',
 ];
 
 interface OverpassResponse {
@@ -120,10 +118,8 @@ async function fetchOverpass(query: string, timeoutMs: number): Promise<Overpass
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'hanabi-mitai/1.0',
-        },
+        // User-Agent などの独自ヘッダーを付けないのは、CORS プリフライトを発生させないため
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
         signal: controller.signal,
       });
@@ -277,25 +273,6 @@ export function accessibilityScore(point: LatLng): number {
   if (inPark) return 1.0; // 公園・広場・河川敷: 観覧に最適
   if (inResidential) return 0.7; // 住宅地: やや観覧しにくい（軽い減点に留める）
   return 0.9; // その他/不明
-}
-
-/**
- * 指定地点にある建物の高さを返す
- * 建物がなければ 0
- */
-export function getBuildingHeight(lng: number, lat: number): number {
-  if (!cachedBuildings || cachedBuildings.length === 0) return 0;
-
-  for (const building of cachedBuildings) {
-    // バウンディングボックスで高速フィルタ
-    if (lng < building.minLng || lng > building.maxLng ||
-        lat < building.minLat || lat > building.maxLat) continue;
-    if (pointInPolygon(lng, lat, building.coords)) {
-      return building.height;
-    }
-  }
-
-  return 0;
 }
 
 /**

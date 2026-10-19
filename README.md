@@ -27,42 +27,23 @@
 | レイヤー | 技術 |
 |----------|------|
 | フロントエンド | TypeScript, Vite, MapLibre GL JS |
-| バックエンド | AWS Lambda (Node.js 20), API Gateway v2 |
-| インフラ | AWS SAM |
-| ホスティング | GitHub Pages（フロント）, API Gateway（API） |
-| データソース | 国土地理院 DEM5A/DEM10B（標高）, OpenStreetMap Overpass API（土地利用・建物） |
+| 分析処理 | ブラウザ内の Web Worker（`src/analysis/`） |
+| ホスティング | GitHub Pages |
+| データソース | 国土地理院 DEM5A/DEM10B（標高）, PLATEAU（東京23区の建物）, OpenStreetMap Overpass API（23区外の土地利用・建物） |
 
 ## ローカル開発
 
 ```bash
-# フロントエンド
 npm install
-npm run dev          # http://localhost:5173
-
-# Lambda ローカルサーバー
-cd lambda
-npm install
-npm run dev          # http://localhost:3001
+npm run dev          # http://localhost:5173/hanabi-mitai/
+npm test             # 分析処理のテスト
 ```
 
-開発時は Vite のプロキシで `/api` → `localhost:3001` に転送される。
+分析処理はブラウザ内で動くため、バックエンドの起動は不要です。標高・建物・土地利用のデータはブラウザから国土地理院、PLATEAU、Overpass API へ直接取得します。
 
 ## デプロイ
 
-### フロントエンド（GitHub Pages）
-
-`main` ブランチに push すると GitHub Actions で自動デプロイ。
-
-### バックエンド（AWS Lambda）
-
-```bash
-# SSO ログイン
-aws sso login --profile AWSAdministratorAccess-314146318183
-
-# Lambda ビルド & デプロイ
-cd lambda && npm run build && cd ..
-sam deploy --profile AWSAdministratorAccess-314146318183 --no-confirm-changeset
-```
+`main` ブランチに push すると GitHub Actions で GitHub Pages に自動デプロイされます。
 
 ## 対応花火大会
 

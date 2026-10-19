@@ -1,5 +1,4 @@
-import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse, GridPoint, ScoredPoint, GeoJSON } from './types.js';
+import type { AnalyzeRequest, AnalyzeResponse, ScorePointRequest, ScorePointResponse, GridPoint, ScoredPoint, GeoJSON } from '../types.js';
 import { generateGrid, filterExclusionZones, haversineDistance } from './grid.js';
 
 /** 打上地点まわりの立入禁止（保安）半径。開花直径相当、最低150m */
@@ -11,29 +10,14 @@ import { quickScorePoint, fullScorePoint } from './scoring.js';
 import { fetchLandUseAndBuildings, fetchBuildingsForLOS, clearLandUseCache } from './accessibility.js';
 import { fetchPlateauBuildings, fetchPlateauBuildingsCorridor, getCachedPlateauBuildings } from './plateau.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
-};
-
-function errorResponse(statusCode: number, message: string): APIGatewayProxyResultV2 {
-  return {
-    statusCode,
-    headers: CORS_HEADERS,
-    body: JSON.stringify({ error: message }),
-  };
-}
-
 /**
  * メインの分析処理
  */
-async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+export async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const { launchSite, radiusMeters, fireworkDiameter } = request;
 
   // グリッド間隔をエリアサイズに応じて調整（採点メッシュの粒度）
-  // 細かいほど良いが、返却 GeoJSON が Lambda の 6MB 応答上限を超えないよう半径で段階調整
+  // 細かいほど良いが、点数は半径の2乗で増えるため半径で段階調整
   const spacing =
     radiusMeters <= 1000 ? 20 :
     radiusMeters <= 1500 ? 25 :
@@ -177,7 +161,7 @@ async function analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
  * 標高データだけで計算できるスコア（仰角・標高・勾配）を先に確定し、
  * Overpass が応答すれば LOS・accessibility も加味する。
  */
-async function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
+export async function scorePoint(request: ScorePointRequest): Promise<ScorePointResponse> {
   const { launchSite, viewerLocation, fireworkDiameter } = request;
 
   // 打上まわりの立入禁止（保安）圏内は採点を拒否
@@ -186,19 +170,11 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
     throw new Error(`打上地点から${safetyRadius}m以内は立入禁止エリアです`);
   }
 
-  // 勾配用の隣接点
-  const SLOPE_DELTA = 0.0003;
-  const slopePoints: import('./types.js').LatLng[] = [
-    { lat: viewerLocation.lat + SLOPE_DELTA, lng: viewerLocation.lng },
-    { lat: viewerLocation.lat - SLOPE_DELTA, lng: viewerLocation.lng },
-    { lat: viewerLocation.lat, lng: viewerLocation.lng + SLOPE_DELTA },
-    { lat: viewerLocation.lat, lng: viewerLocation.lng - SLOPE_DELTA },
-  ];
-
   // PLATEAU 建物と標高を並列取得
-  const [, elevations] = await Promise.all([
+  const [, launchSiteElevation, viewerElevation] = await Promise.all([
     fetchPlateauBuildingsCorridor(viewerLocation, launchSite),
-    getElevationBatch([launchSite, viewerLocation, ...slopePoints]),
+    getElevation(launchSite.lat, launchSite.lng),
+    getElevation(viewerLocation.lat, viewerLocation.lng),
   ]);
 
   // 建物は PLATEAU 優先。圏外(null)のときのみ OSM をフォールバック取得
@@ -208,9 +184,6 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
     clearLandUseCache();
   }
 
-  const launchSiteElevation = elevations[0] ?? 0;
-  const viewerElevation = elevations[1];
-
   if (viewerElevation === null) {
     throw new Error('現在地の標高データを取得できませんでした');
   }
@@ -218,91 +191,9 @@ async function scorePoint(request: ScorePointRequest): Promise<ScorePointRespons
   const viewer = await fullScorePoint(
     { lat: viewerLocation.lat, lng: viewerLocation.lng, elevation: viewerElevation },
     launchSite,
-    launchSiteElevation,
+    launchSiteElevation ?? 0,
     fireworkDiameter,
   );
 
-  return { launchSite, launchSiteElevation, viewer };
-}
-
-/**
- * LatLng のバリデーション
- */
-function validateLatLng(point: { lat?: unknown; lng?: unknown }, label: string): string | null {
-  if (!point || typeof point.lat !== 'number' || typeof point.lng !== 'number') {
-    return `${label}の緯度経度が必要です`;
-  }
-  if (point.lat < 20 || point.lat > 46) {
-    return `${label}の緯度は日本国内 (20〜46) を指定してください`;
-  }
-  if (point.lng < 122 || point.lng > 154) {
-    return `${label}の経度は日本国内 (122〜154) を指定してください`;
-  }
-  return null;
-}
-
-/**
- * Lambda ハンドラー
- */
-export async function handler(
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyResultV2> {
-  // CORS preflight
-  if (event.requestContext.http.method === 'OPTIONS') {
-    return { statusCode: 200, headers: CORS_HEADERS, body: '' };
-  }
-
-  const path = event.rawPath || event.requestContext.http.path || '';
-
-  try {
-    if (!event.body) {
-      return errorResponse(400, 'リクエストボディが必要です');
-    }
-
-    // --- /api/score-point ---
-    if (path.endsWith('/score-point')) {
-      const req: ScorePointRequest = JSON.parse(event.body);
-
-      const launchErr = validateLatLng(req.launchSite, '打上地点');
-      if (launchErr) return errorResponse(400, launchErr);
-
-      const viewerErr = validateLatLng(req.viewerLocation, '現在地');
-      if (viewerErr) return errorResponse(400, viewerErr);
-
-      const result = await scorePoint(req);
-      return {
-        statusCode: 200,
-        headers: CORS_HEADERS,
-        body: JSON.stringify(result),
-      };
-    }
-
-    // --- /api/analyze (default) ---
-    const request: AnalyzeRequest = JSON.parse(event.body);
-
-    const launchErr = validateLatLng(request.launchSite, '打上地点');
-    if (launchErr) return errorResponse(400, launchErr);
-
-    const radiusMeters = request.radiusMeters || 2000;
-    if (radiusMeters < 500 || radiusMeters > 5000) {
-      return errorResponse(400, '検索半径は 500〜5000m を指定してください');
-    }
-
-    const result = await analyze({
-      launchSite: request.launchSite,
-      radiusMeters,
-      exclusionZones: request.exclusionZones,
-      fireworkDiameter: request.fireworkDiameter,
-    });
-
-    return {
-      statusCode: 200,
-      headers: CORS_HEADERS,
-      body: JSON.stringify(result),
-    };
-  } catch (err) {
-    console.error('Error:', err);
-    const message = err instanceof Error ? err.message : '処理でエラーが発生しました';
-    return errorResponse(500, message);
-  }
+  return { launchSite, launchSiteElevation: launchSiteElevation ?? 0, viewer };
 }

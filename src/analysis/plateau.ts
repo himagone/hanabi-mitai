@@ -1,6 +1,6 @@
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
-import type { LatLng } from './types.js';
+import type { LatLng } from '../types.js';
 import type { BuildingPolygon } from './accessibility.js';
 
 /**
@@ -36,10 +36,6 @@ let cachedBuildings: BuildingPolygon[] | null = null;
  */
 export function getCachedPlateauBuildings(): BuildingPolygon[] | null {
   return cachedBuildings;
-}
-
-export function clearPlateauCache(): void {
-  cachedBuildings = null;
 }
 
 // --- タイル座標変換（Web メルカトル） ---
